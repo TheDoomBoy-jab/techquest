@@ -1,0 +1,67 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[manifest]
+members = [
+    "techquest",
+    "techquest-agent-compliance",
+    "techquest-agent-financial",
+    "techquest-agent-toxicity",
+    "techquest-gateway",
+    "techquest-mcp-audit",
+    "techquest-mcp-ehr",
+    "techquest-mcp-rag",
+    "techquest-orchestrator",
+    "techquest-shared-schemas",
+]
+
+[[package]]
+name = "techquest"
+version = "0.1.0"
+source = { virtual = "." }
+
+[[package]]
+name = "techquest-agent-compliance"
+version = "0.1.0"
+source = { virtual = "apps/agent-compliance" }
+
+[[package]]
+name = "techquest-agent-financial"
+version = "0.1.0"
+source = { virtual = "apps/agent-financial" }
+
+[[package]]
+name = "techquest-agent-toxicity"
+version = "0.1.0"
+source = { virtual = "apps/agent-toxicity" }
+
+[[package]]
+name = "techquest-gateway"
+version = "0.1.0"
+source = { virtual = "apps/gateway" }
+
+[[package]]
+name = "techquest-mcp-audit"
+version = "0.1.0"
+source = { virtual = "packages/mcp-audit" }
+
+[[package]]
+name = "techquest-mcp-ehr"
+version = "0.1.0"
+source = { virtual = "packages/mcp-ehr" }
+
+[[package]]
+name = "techquest-mcp-rag"
+version = "0.1.0"
+source = { virtual = "packages/mcp-rag" }
+
+[[package]]
+name = "techquest-orchestrator"
+version = "0.1.0"
+source = { virtual = "apps/orchestrator" }
+
+[[package]]
+name = "techquest-shared-schemas"
+version = "0.1.0"
+source = { virtual = "packages/shared-schemas" }
