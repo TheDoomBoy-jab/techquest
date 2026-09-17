@@ -1,0 +1,8 @@
+{
+  "metadata": {
+    "version": "2.0.0",
+    "description": "Synthetic FHIR cohort with full medical histories and narratives",
+    "patient_count": 0
+  },
+  "patients": []
+}

@@ -1,0 +1,8 @@
+a2a-sdk
+httpx
+langchain-core
+langchain-openai
+python-dotenv
+sse-starlette
+starlette
+uvicorn
