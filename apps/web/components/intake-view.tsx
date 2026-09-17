@@ -5,6 +5,7 @@ import {
   Activity,
   Check,
   ChevronDown,
+  Lock,
   Search,
   Send,
   User,
@@ -31,9 +32,10 @@ export type Patient = {
 
 type IntakeViewProps = {
   onSubmit: (patient: Patient, protocol: string, action: string) => void
+  disqualifiedIds?: string[]
 }
 
-export function IntakeView({ onSubmit }: IntakeViewProps) {
+export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [query, setQuery] = useState("")
@@ -42,6 +44,8 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
   const [protocol, setProtocol] = useState(PROTOCOLS[0])
   const [action, setAction] = useState("Apixaban 5 mg oral twice daily")
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const isDisqualified = Boolean(selected && disqualifiedIds.includes(selected.patient_id))
 
   useEffect(() => {
     async function fetchPatients() {
@@ -279,6 +283,7 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                     </li>
                   )}
                   {results.map((p) => {
+                    const isDisqualifiedItem = disqualifiedIds.includes(p.patient_id)
                     const isG1 = p.patient_id === "P034"
                     const isG2 = p.patient_id === "P035"
                     const isRagRule = p.patient_id === "P036"
@@ -294,15 +299,19 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                             choose(p)
                           }}
                           className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-[#2a2a2a] transition-colors ${
-                            isNonAligned ? "border-l-2 border-amber-500/80 bg-[#161616]" : ""
+                            isDisqualifiedItem
+                              ? "border-l-2 border-rose-600 bg-rose-950/20"
+                              : isNonAligned
+                              ? "border-l-2 border-amber-500/80 bg-[#161616]"
+                              : ""
                           }`}
                         >
                           <span className="flex items-center gap-3">
                             <span
                               className={`flex size-8 shrink-0 items-center justify-center rounded-md ${
-                                isG1
-                                  ? "bg-rose-500/20 text-rose-400"
-                                  : isG2
+                                isDisqualifiedItem
+                                  ? "bg-rose-600/30 text-rose-300"
+                                  : isG1 || isG2
                                   ? "bg-rose-500/20 text-rose-400"
                                   : isRagRule
                                   ? "bg-amber-500/20 text-amber-400"
@@ -311,14 +320,19 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                                   : "bg-[#121212] text-slate-400"
                               }`}
                             >
-                              <User className="size-4" />
+                              {isDisqualifiedItem ? <Lock className="size-4" /> : <User className="size-4" />}
                             </span>
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="block text-sm font-medium text-white">
                                   {p.name}
                                 </span>
-                                {isG1 && (
+                                {isDisqualifiedItem && (
+                                  <span className="rounded bg-rose-600/30 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-200 border border-rose-500/60">
+                                    ⛔ Disqualified (3/3)
+                                  </span>
+                                )}
+                                {!isDisqualifiedItem && isG1 && (
                                   <span className="rounded bg-rose-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-300 border border-rose-500/30">
                                     G1 Ingress Failure
                                   </span>
@@ -346,7 +360,9 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                           </span>
                           <span
                             className={`rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0 ${
-                              isG1 || isG2
+                              isDisqualifiedItem
+                                ? "border-rose-500/60 bg-rose-950/60 text-rose-300 font-bold"
+                                : isG1 || isG2
                                 ? "border-rose-500/40 bg-rose-500/10 text-rose-300"
                                 : isRagRule
                                 ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
@@ -355,7 +371,9 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                                 : "border-[#2e2e2e] bg-[#121212] text-slate-300"
                             }`}
                           >
-                            {isG1
+                            {isDisqualifiedItem
+                              ? "Locked Out"
+                              : isG1
                               ? "Ingress Test"
                               : isG2
                               ? "Safety Corridor"
@@ -363,9 +381,7 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                               ? "RAG Dosing"
                               : isA2A
                               ? "A2A Consensus"
-                              : p.cohort
-                              ? p.cohort.split(" - ")[0]
-                              : "Standard"}
+                              : p.cohort}
                           </span>
                         </button>
                       </li>
@@ -557,9 +573,13 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
                         const pat = patients.find(p => p.patient_id === "P034")
                         if (pat) choose(pat)
                       }}
-                      className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      className={`rounded border px-2 py-0.5 text-[11px] font-mono transition-colors ${
+                        disqualifiedIds.includes("P034")
+                          ? "border-rose-600 bg-rose-950/80 text-rose-200 hover:bg-rose-900/80"
+                          : "border-rose-800/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60"
+                      }`}
                     >
-                      P034: G1 Ingress Fail
+                      {disqualifiedIds.includes("P034") ? "P034: Locked Out (3/3)" : "P034: G1 Ingress Fail"}
                     </button>
                     <button
                       type="button"
@@ -602,17 +622,45 @@ export function IntakeView({ onSubmit }: IntakeViewProps) {
               rows={3}
               className="w-full resize-none rounded-lg border border-[#2e2e2e] bg-[#121212] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-[#3b82f6] focus:outline-none font-mono"
             />
+
+            {isDisqualified && (
+              <div className="mt-4 rounded-xl border border-rose-500/60 bg-gradient-to-r from-rose-950/60 via-[#1a0c0e] to-[#121212] p-4 space-y-2 text-xs text-rose-200 shadow-lg shadow-rose-950/40">
+                <div className="flex items-center gap-2 font-bold uppercase tracking-wide text-rose-300">
+                  <Lock className="size-4 text-rose-400" />
+                  ⛔ Patient ID Permanently Excluded (3/3 Retries Exhausted)
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  Patient <strong className="font-mono text-white underline">{selected?.patient_id}</strong> is disqualified from clinical trial intake under <strong>FDA 21 CFR 312.62 & ICH E6(R2)</strong>. The 3-iteration demographic resupply budget has been exhausted without verified demographic resolution. This enrollment portal is barred from accepting or submitting this patient ID.
+                </p>
+                <div className="rounded border border-rose-800/40 bg-[#0d0507] p-2 text-[11px] font-mono text-rose-400">
+                  Terminal Gate Status: EXCLUDED_MAX_ITERS · 21 CFR 312.62 Ingress Lockout
+                </div>
+              </div>
+            )}
           </div>
 
           <Button
-            disabled={!selected}
+            disabled={!selected || isDisqualified}
             onClick={() =>
-              selected && onSubmit(selected, protocol, action)
+              selected && !isDisqualified && onSubmit(selected, protocol, action)
             }
-            className="mt-6 h-11 w-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 disabled:opacity-40"
+            className={`mt-6 h-11 w-full font-semibold transition-all ${
+              isDisqualified
+                ? "bg-rose-950/80 border border-rose-700/60 text-rose-300 cursor-not-allowed shadow-inner"
+                : "bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 disabled:opacity-40"
+            }`}
           >
-            <Send className="size-4" />
-            Submit for AI Review
+            {isDisqualified ? (
+              <>
+                <Lock className="size-4 mr-2 text-rose-400" />
+                Cannot Submit: Patient ID Permanently Excluded (3/3)
+              </>
+            ) : (
+              <>
+                <Send className="size-4 mr-2" />
+                Submit for AI Review
+              </>
+            )}
           </Button>
           {!selected && (
             <p className="mt-2 text-center text-xs text-slate-500">

@@ -37,7 +37,10 @@ export type ProtocolViolation = {
 
 export type Guardrail1Result = {
   passed: boolean
-  status: "PASSED" | "FAILED"
+  status: "PASSED" | "FAILED" | "EXCLUDED_MAX_ITERS"
+  locked?: boolean
+  resupply_attempts?: number
+  max_iters?: number
   missing_fields: string[]
   reason: string
   regulatory_citation: string
@@ -210,4 +213,34 @@ export async function submitDecision(
       return { status: "restarting" };
     }
     return { status: "success", decision, patientId };
+}
+
+export async function resupplyPatientData(
+  patientId: string,
+  resupplied: { age?: number | string | null; sex?: string | null },
+  attemptNumber: number = 1,
+  maxIters: number = 3,
+  justification?: string
+) {
+  const payload = {
+    patientId,
+    resupplied,
+    attempt_number: attemptNumber,
+    max_iters: maxIters,
+    justification: justification || `FHIR Demographic resupply attempt ${attemptNumber} of ${maxIters}`,
+  };
+
+  const response = await fetch("http://localhost:8000/api/orchestrator/resupply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => null);
+    const detail = errBody?.detail || response.statusText || String(response.status);
+    throw new Error(`Failed to resupply patient demographic data: ${detail}`);
+  }
+
+  return response.json();
 }

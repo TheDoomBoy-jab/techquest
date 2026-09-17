@@ -14,9 +14,18 @@ type Props = {
   protocol: string
   action: string
   onBack: () => void
+  onDisqualifyPatient?: (patientId: string) => void
+  onUpdatePatient?: (updatedPatient: Partial<Patient>) => void
 }
 
-export function AdjudicationConsole({ patient, protocol, action, onBack }: Props) {
+export function AdjudicationConsole({
+  patient,
+  protocol,
+  action,
+  onBack,
+  onDisqualifyPatient,
+  onUpdatePatient,
+}: Props) {
   const protocolId = protocol.split(" ")[0]
 
   const [streamKey, setStreamKey] = useState(0)
@@ -140,6 +149,11 @@ export function AdjudicationConsole({ patient, protocol, action, onBack }: Props
             patient={patient}
             arbitrationResult={arbitrationResult}
             onRestartStream={handleRestartStream}
+            onPatientUpdated={onUpdatePatient}
+            onPatientDisqualified={(id) => {
+              onDisqualifyPatient?.(id)
+              onBack()
+            }}
           />
         )}
 

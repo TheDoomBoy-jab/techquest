@@ -216,8 +216,8 @@ def _patient_data(rag_output: dict) -> tuple[str | None, dict]:
     }
 
 
-def evaluate_guardrail_1(patient: dict, trial_id: str | None) -> dict:
-    """Guardrail 1: Validates demographic & schema integrity per 21 CFR 312.62."""
+def evaluate_guardrail_1(patient: dict, trial_id: str | None, resupply_attempts: int = 0, max_iters: int = 3) -> dict:
+    """Guardrail 1: Validates demographic & schema integrity per 21 CFR 312.62 with max_iters retry budget."""
     missing_fields = []
     pid = patient.get("patient_id")
     if not pid:
@@ -232,22 +232,45 @@ def evaluate_guardrail_1(patient: dict, trial_id: str | None) -> dict:
         missing_fields.append("trial_id")
 
     is_failed = len(missing_fields) > 0
+    is_locked = is_failed and (resupply_attempts >= max_iters)
+
+    if is_locked:
+        status = "EXCLUDED_MAX_ITERS"
+        reason = (
+            f"Mandatory demographic resupply retry budget exhausted ({resupply_attempts}/{max_iters} attempts). "
+            f"Subject ID {pid or 'UNKNOWN'} is permanently excluded from trial intake under FDA 21 CFR 312.62 & ICH E6(R2). "
+            "Enrollment portal will not accept this ID."
+        )
+        action_required = "Subject permanently disqualified. Return to Intake Queue or select an eligible participant."
+    elif is_failed:
+        status = "FAILED"
+        reason = (
+            f"Mandatory patient demographic integrity failure: missing required field(s) [{', '.join(missing_fields)}]. "
+            f"Ingress schema validation failed per FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3. "
+            f"(Attempt {resupply_attempts + 1} of {max_iters} - Clinician resupply required)."
+        )
+        action_required = f"Clinician must resupply missing demographic fields [{', '.join(missing_fields)}] (Attempt {resupply_attempts + 1} of {max_iters})."
+    else:
+        status = "PASSED"
+        if resupply_attempts > 0:
+            reason = (
+                f"Patient demographics successfully resupplied by clinician and verified on attempt {resupply_attempts} of {max_iters}. "
+                "Demographics conform to 21 CFR Part 11 ingress specifications."
+            )
+        else:
+            reason = "Patient demographics and upstream trial schema contract verified (patient_id, age, biological sex conform to 21 CFR Part 11 ingress specifications)."
+        action_required = "None - Ingress verification complete."
+
     return {
         "passed": not is_failed,
-        "status": "FAILED" if is_failed else "PASSED",
+        "status": status,
+        "locked": is_locked,
+        "resupply_attempts": resupply_attempts,
+        "max_iters": max_iters,
         "missing_fields": missing_fields,
-        "reason": (
-            f"Mandatory patient demographic integrity failure: missing required field(s) [{', '.join(missing_fields)}]. "
-            "Ingress schema validation failed per FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3."
-            if is_failed
-            else "Patient demographics and upstream trial schema contract verified (patient_id, age, biological sex conform to 21 CFR Part 11 ingress specifications)."
-        ),
+        "reason": reason,
         "regulatory_citation": "FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3 (Investigational Subject Identification)",
-        "action_required": (
-            "Resupply complete patient demographic records prior to trial stratification."
-            if is_failed
-            else "None - Ingress verification complete."
-        ),
+        "action_required": action_required,
     }
 
 
@@ -646,7 +669,9 @@ async def run(
             }
 
     trial_id_val = rag_output.get("trial_id", "NCT02415400")
-    guardrail_1 = evaluate_guardrail_1(patient_dict, trial_id_val)
+    resupply_attempts = int(rag_output.get("resupply_attempts", 0) or 0)
+    max_iters = int(rag_output.get("max_iters", 3) or 3)
+    guardrail_1 = evaluate_guardrail_1(patient_dict, trial_id_val, resupply_attempts=resupply_attempts, max_iters=max_iters)
     guardrail_2 = evaluate_guardrail_2(patient_dict, trial_id_val)
     rag_rules = evaluate_rag_rules(patient_dict, trial_id_val, current_action)
 

@@ -34,7 +34,7 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { processClinicalComment, submitDecision } from "@/app/actions"
+import { processClinicalComment, submitDecision, resupplyPatientData } from "@/app/actions"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
 
@@ -42,6 +42,8 @@ type Props = {
   patient: Patient
   arbitrationResult: ArbitrationResult
   onRestartStream?: () => void
+  onPatientUpdated?: (updatedPatient: Partial<Patient>) => void
+  onPatientDisqualified?: (patientId: string) => void
 }
 
 function formatLimit(limit: unknown): string {
@@ -71,7 +73,13 @@ function formatLimit(limit: unknown): string {
   return String(limit)
 }
 
-export function DecisionGateway({ patient, arbitrationResult, onRestartStream }: Props) {
+export function DecisionGateway({
+  patient,
+  arbitrationResult,
+  onRestartStream,
+  onPatientUpdated,
+  onPatientDisqualified,
+}: Props) {
   // Normalize patient renal clearance telemetry with explicit units
   const renalDisplay = useMemo(() => {
     const raw = patient?.creatinine
@@ -246,6 +254,9 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
     return {
       passed: !isFailed,
       status: isFailed ? ("FAILED" as const) : ("PASSED" as const),
+      locked: false,
+      resupply_attempts: 0,
+      max_iters: 3,
       missing_fields: missing,
       reason: isFailed
         ? `Mandatory patient demographic integrity failure: missing required field(s) [${missing.join(", ")}]. Ingress schema validation failed per FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3.`
@@ -403,6 +414,92 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
   const [showDeepAudit, setShowDeepAudit] = useState(false)
   const [copiedPayload, setCopiedPayload] = useState(false)
   const [decision, setDecision] = useState<"accept" | "reject" | "override" | null>(null)
+
+  // Ingress Demographic Resupply & Retry Budget State
+  const currentAttempts = guardrail1.resupply_attempts ?? 0
+  const maxIters = guardrail1.max_iters ?? 3
+  const isLockedOut = Boolean(
+    guardrail1.locked ||
+    guardrail1.status === "EXCLUDED_MAX_ITERS" ||
+    (currentAttempts >= maxIters && !guardrail1.passed)
+  )
+
+  const [resupplyAge, setResupplyAge] = useState<string>(
+    patient?.age && patient.age > 0 ? String(patient.age) : ""
+  )
+  const [resupplySex, setResupplySex] = useState<string>(
+    patient?.sex && patient.sex !== "unknown"
+      ? patient.sex.toUpperCase() === "F"
+        ? "Female"
+        : patient.sex.toUpperCase() === "M"
+        ? "Male"
+        : patient.sex
+      : ""
+  )
+  const [resupplyAttestation, setResupplyAttestation] = useState<string>(
+    "Verified Against Hospital Intake Chart (FHIR Encounter Resupply)"
+  )
+  const [isResupplying, setIsResupplying] = useState(false)
+  const [resupplyError, setResupplyError] = useState<string | null>(null)
+
+  async function handleResupplySubmit() {
+    const ageNum = parseFloat(resupplyAge)
+    if (isNaN(ageNum) || ageNum <= 0 || ageNum > 120) {
+      setResupplyError("Please enter a valid patient age between 1 and 120 years.")
+      return
+    }
+    if (!resupplySex || resupplySex.trim() === "") {
+      setResupplyError("Please select biological sex.")
+      return
+    }
+
+    setResupplyError(null)
+    setIsResupplying(true)
+    try {
+      const nextAttempt = currentAttempts + 1
+      await resupplyPatientData(
+        patient.id,
+        { age: ageNum, sex: resupplySex.toLowerCase() },
+        nextAttempt,
+        maxIters,
+        `Clinician demographic resupply (Age: ${ageNum}, Sex: ${resupplySex}): ${resupplyAttestation}`
+      )
+      onPatientUpdated?.({
+        age: ageNum,
+        sex: resupplySex === "Female" || resupplySex === "F" ? "F" : "M",
+      })
+      onRestartStream?.()
+    } catch (err: any) {
+      console.error("Resupply error:", err)
+      setResupplyError(err?.message || "Failed to resupply demographics.")
+    } finally {
+      setIsResupplying(false)
+    }
+  }
+
+  async function handleSkipResupply() {
+    setIsResupplying(true)
+    setResupplyError(null)
+    try {
+      const nextAttempt = currentAttempts + 1
+      await resupplyPatientData(
+        patient.id,
+        {},
+        nextAttempt,
+        maxIters,
+        `Clinician unable to supply demographic records on attempt ${nextAttempt} of ${maxIters}`
+      )
+      if (nextAttempt >= maxIters) {
+        onPatientDisqualified?.(patient.id)
+      }
+      onRestartStream?.()
+    } catch (err: any) {
+      console.error("Failed to record failed attempt:", err)
+      setResupplyError(err?.message || "Failed to record attempt.")
+    } finally {
+      setIsResupplying(false)
+    }
+  }
 
   // Extract-and-Confirm State
   const [comment, setComment] = useState("")
@@ -777,8 +874,10 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
           {/* SECTION 1: Ingress Demographic Validation (Guardrail 1) */}
           <div
             className={`rounded-xl border p-4.5 transition-all ${
-              !guardrail1.passed
-                ? "border-rose-500/50 bg-gradient-to-r from-rose-950/40 via-[#181113] to-[#121212] shadow-lg shadow-rose-950/30"
+              isLockedOut
+                ? "border-rose-600/80 bg-gradient-to-r from-rose-950/80 via-[#1c0a0e] to-[#121212] shadow-xl shadow-rose-950/50 ring-1 ring-rose-500/50"
+                : !guardrail1.passed
+                ? "border-amber-500/50 bg-gradient-to-r from-amber-950/40 via-[#191410] to-[#121212] shadow-lg shadow-amber-950/30"
                 : "border-emerald-500/30 bg-[#141414]"
             }`}
           >
@@ -786,10 +885,20 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
               <div className="flex items-center gap-2">
                 <div
                   className={`flex size-7 items-center justify-center rounded-lg ${
-                    !guardrail1.passed ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/15 text-emerald-400"
+                    isLockedOut
+                      ? "bg-rose-500/20 text-rose-300"
+                      : !guardrail1.passed
+                      ? "bg-amber-500/20 text-amber-300"
+                      : "bg-emerald-500/15 text-emerald-400"
                   }`}
                 >
-                  {!guardrail1.passed ? <ShieldAlert className="size-4" /> : <ShieldCheck className="size-4" />}
+                  {isLockedOut ? (
+                    <Lock className="size-4" />
+                  ) : !guardrail1.passed ? (
+                    <ShieldAlert className="size-4" />
+                  ) : (
+                    <ShieldCheck className="size-4" />
+                  )}
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-white leading-tight">
@@ -803,22 +912,72 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
 
               <span
                 className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
-                  !guardrail1.passed
-                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                  isLockedOut
+                    ? "bg-rose-500/30 text-rose-200 border border-rose-500/60 animate-pulse"
+                    : !guardrail1.passed
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                     : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
                 }`}
               >
-                {!guardrail1.passed ? "INGRESS_FAILED: NON-CONFORMANT" : "PASSED: SCHEMA VERIFIED"}
+                {isLockedOut
+                  ? "⛔ LOCKED OUT: 3/3 MAX ITERATIONS EXCEEDED"
+                  : !guardrail1.passed
+                  ? `INGRESS_FAILED: RESUPPLY REQ (ATTEMPT ${currentAttempts + 1}/${maxIters})`
+                  : currentAttempts > 0
+                  ? `PASSED: RESUPPLIED (ATTEMPT ${currentAttempts}/${maxIters})`
+                  : "PASSED: SCHEMA VERIFIED"}
               </span>
             </div>
 
-            <div className="mt-3 space-y-2.5">
-              {!guardrail1.passed ? (
+            <div className="mt-3 space-y-3">
+              {isLockedOut ? (
+                /* Permanent Terminal Lockout Banner */
+                <div className="rounded-xl border border-rose-500/60 bg-rose-950/60 p-4 space-y-3 shadow-inner">
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-rose-500/30 text-rose-200">
+                      <Lock className="size-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h5 className="font-bold text-sm text-rose-200 uppercase tracking-wide flex items-center gap-2">
+                        ⛔ Ingress Rejected: Patient ID Locked Out ({currentAttempts}/{maxIters} Attempts Exceeded)
+                      </h5>
+                      <p className="text-xs text-rose-100/90 leading-relaxed">
+                        Subject ID <strong className="font-mono text-white underline">{patient.id}</strong> has exhausted the regulatory retry budget of <strong>{maxIters} attempts</strong> without verified demographic data. Under <strong>FDA 21 CFR 312.62 & ICH E6(R2)</strong>, this patient ID is permanently excluded and disqualified from the trial intake session.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs pt-1">
+                    <div className="rounded-lg border border-rose-800/50 bg-[#0c0507] p-2.5 space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-rose-400">
+                        Regulatory Authority Citation
+                      </span>
+                      <p className="text-slate-300 font-medium">{guardrail1.regulatory_citation}</p>
+                    </div>
+                    <div className="rounded-lg border border-rose-800/50 bg-[#0c0507] p-2.5 space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400">
+                        Enforcement Status
+                      </span>
+                      <p className="text-amber-200 font-medium">Terminal Disqualification · Intake portal will not accept this ID.</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex justify-end">
+                    <Button
+                      onClick={() => onPatientDisqualified?.(patient.id)}
+                      className="h-8 bg-rose-700 hover:bg-rose-600 text-white font-semibold text-xs transition-all shadow-md"
+                    >
+                      <Lock className="size-3.5 mr-1.5" />
+                      Disqualify Subject & Return to Intake Queue
+                    </Button>
+                  </div>
+                </div>
+              ) : !guardrail1.passed ? (
                 <>
                   <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-rose-200 uppercase tracking-wide">
-                        Missing Mandatory Attributes:
+                        Missing Mandatory Demographic Attributes:
                       </span>
                       <span className="rounded bg-rose-500/30 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-100">
                         21 CFR 312.62 BREACH
@@ -840,6 +999,117 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
                     </p>
                   </div>
 
+                  {/* Interactive Clinician Demographic Resupply Console */}
+                  <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-950/30 via-[#181510] to-[#121212] p-3.5 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="size-4 text-amber-400" />
+                        <span className="text-xs font-bold text-amber-200 uppercase tracking-wide">
+                          Clinician FHIR Demographic Resupply Console
+                        </span>
+                      </div>
+                      <span className="rounded-full border border-amber-500/40 bg-amber-500/20 px-2.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                        Resupply Attempt {currentAttempts + 1} of {maxIters} · ({maxIters - currentAttempts} remaining)
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      FDA 21 CFR 312.62 mandates complete demographic identification prior to clinical trial stratification. Attending clinician may manually input verified demographics below or record an unfulfilled resupply attempt. (Maximum {maxIters} attempts allowed before permanent patient ID lockout).
+                    </p>
+
+                    {resupplyError && (
+                      <div className="flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-950/40 p-2 text-xs text-rose-300">
+                        <AlertCircle className="size-4 shrink-0" />
+                        <span>{resupplyError}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1">
+                          Patient Age (Years) <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="120"
+                          value={resupplyAge}
+                          onChange={(e) => setResupplyAge(e.target.value)}
+                          placeholder="e.g. 58"
+                          disabled={isResupplying}
+                          className={`w-full rounded-lg border px-3 py-2 text-xs text-white font-mono placeholder:text-slate-500 focus:outline-none focus:ring-1 ${
+                            guardrail1.missing_fields.includes("patient.age")
+                              ? "border-amber-500/50 bg-[#1e1710] focus:ring-amber-400"
+                              : "border-[#2e2e2e] bg-[#121212] focus:ring-sky-400"
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1">
+                          Biological Sex <span className="text-rose-400">*</span>
+                        </label>
+                        <select
+                          value={resupplySex}
+                          onChange={(e) => setResupplySex(e.target.value)}
+                          disabled={isResupplying}
+                          className={`w-full rounded-lg border px-3 py-2 text-xs text-white font-mono focus:outline-none focus:ring-1 ${
+                            guardrail1.missing_fields.includes("patient.sex")
+                              ? "border-amber-500/50 bg-[#1e1710] focus:ring-amber-400"
+                              : "border-[#2e2e2e] bg-[#121212] focus:ring-sky-400"
+                          }`}
+                        >
+                          <option value="">Select Biological Sex</option>
+                          <option value="Female">Female</option>
+                          <option value="Male">Male</option>
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-2 md:col-span-1">
+                        <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1">
+                          Ingress Attestation
+                        </label>
+                        <input
+                          type="text"
+                          value={resupplyAttestation}
+                          onChange={(e) => setResupplyAttestation(e.target.value)}
+                          disabled={isResupplying}
+                          className="w-full rounded-lg border border-[#2e2e2e] bg-[#121212] px-3 py-2 text-xs text-white font-mono placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <Button
+                        onClick={handleResupplySubmit}
+                        disabled={isResupplying}
+                        className="h-8.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition-all shadow-md shadow-amber-950/40"
+                      >
+                        {isResupplying ? (
+                          <>
+                            <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                            Re-evaluating Pipeline...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="size-3.5 mr-1.5" />
+                            Resupply Demographics & Re-evaluate
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        onClick={handleSkipResupply}
+                        disabled={isResupplying}
+                        className="h-8.5 border-rose-500/40 bg-rose-950/20 text-rose-300 hover:bg-rose-950/40 hover:text-white text-xs font-semibold"
+                      >
+                        <AlertTriangle className="size-3.5 mr-1.5 text-rose-400" />
+                        Unable to Supply (Record Attempt {currentAttempts + 1}/{maxIters})
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg border border-[#262626] bg-[#0d0d0d] p-2.5 space-y-1">
                       <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
@@ -858,7 +1128,10 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
               ) : (
                 <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-xs text-emerald-300">
                   <span>
-                    ✓ <strong>Subject Demographics Verified:</strong> Complete age, sex, and trial identifiers conform with FDA 21 CFR 312.62 ingress specifications.
+                    ✓ <strong>Subject Demographics Verified:</strong>{" "}
+                    {currentAttempts > 0
+                      ? `Demographics successfully resupplied by clinician and verified on attempt ${currentAttempts} of ${maxIters}.`
+                      : "Complete age, sex, and trial identifiers conform with FDA 21 CFR 312.62 ingress specifications."}
                   </span>
                   <span className="font-mono text-[10px] text-emerald-400">0 Missing Fields</span>
                 </div>
@@ -1607,49 +1880,68 @@ export function DecisionGateway({ patient, arbitrationResult, onRestartStream }:
       </div>
 
       {/* Action Bar */}
-      <div className="flex flex-col gap-2.5 sm:flex-row pt-2">
-        <Button
-          onClick={() => handleDirectDecision("accept")}
-          className={`h-11 flex-1 font-semibold text-white transition-all ${
-            decision === "accept"
-              ? "bg-[#10b981] ring-2 ring-[#10b981]/50"
-              : isJustified
-                ? "bg-[#10b981] hover:bg-[#10b981]/90"
-                : "bg-slate-700 hover:bg-slate-600 text-slate-200"
-          }`}
-        >
-          <Check className="size-4 mr-1.5" />
-          Accept {isJustified ? "Order" : "(Caution: Non-Compliant)"}
-        </Button>
-
-        <Button
-          variant="outline"
-          onClick={() => setModifyOpen((v) => !v)}
-          className="h-11 flex-1 border-[#2e2e2e] bg-[#121212] font-semibold text-white hover:bg-[#252525] hover:text-white transition-all"
-        >
-          <Pencil className="size-4 mr-1.5" />
-          Modify Dosage / Override
-          <ChevronDown
-            className={`size-4 ml-1.5 transition-transform ${
-              modifyOpen ? "rotate-180" : ""
+      {isLockedOut ? (
+        <div className="rounded-xl border border-rose-500/50 bg-gradient-to-r from-rose-950/40 via-[#181113] to-[#121212] p-4 space-y-3">
+          <div className="flex items-center gap-2 text-rose-300 text-xs font-bold uppercase tracking-wider">
+            <Lock className="size-4 text-rose-400" />
+            Decision Actions Barred · Subject Locked Out (3/3 Retries Exceeded)
+          </div>
+          <p className="text-xs text-slate-300">
+            This patient record is permanently excluded from trial intake under FDA 21 CFR 312.62 because mandatory demographic data was unfulfilled after 3 iterations. Clinical order co-signature and protocol overrides are disabled for this ID.
+          </p>
+          <Button
+            onClick={() => onPatientDisqualified?.(patient.id)}
+            className="h-11 w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition-all shadow-lg shadow-rose-950/50"
+          >
+            <Lock className="size-4 mr-2" />
+            Disqualify Subject & Return to Intake Queue
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5 sm:flex-row pt-2">
+          <Button
+            onClick={() => handleDirectDecision("accept")}
+            className={`h-11 flex-1 font-semibold text-white transition-all ${
+              decision === "accept"
+                ? "bg-[#10b981] ring-2 ring-[#10b981]/50"
+                : isJustified
+                  ? "bg-[#10b981] hover:bg-[#10b981]/90"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-200"
             }`}
-          />
-        </Button>
+          >
+            <Check className="size-4 mr-1.5" />
+            Accept {isJustified ? "Order" : "(Caution: Non-Compliant)"}
+          </Button>
 
-        <Button
-          onClick={() => handleDirectDecision("reject")}
-          className={`h-11 flex-1 font-semibold text-white transition-all ${
-            decision === "reject"
-              ? "bg-[#ef4444] ring-2 ring-[#ef4444]/50"
-              : !isJustified
-                ? "bg-[#ef4444] hover:bg-[#ef4444]/90"
-                : "bg-slate-700 hover:bg-slate-600 text-slate-200"
-          }`}
-        >
-          <X className="size-4 mr-1.5" />
-          Reject Order {!isJustified && "(Recommended)"}
-        </Button>
-      </div>
+          <Button
+            variant="outline"
+            onClick={() => setModifyOpen((v) => !v)}
+            className="h-11 flex-1 border-[#2e2e2e] bg-[#121212] font-semibold text-white hover:bg-[#252525] hover:text-white transition-all"
+          >
+            <Pencil className="size-4 mr-1.5" />
+            Modify Dosage / Override
+            <ChevronDown
+              className={`size-4 ml-1.5 transition-transform ${
+                modifyOpen ? "rotate-180" : ""
+              }`}
+            />
+          </Button>
+
+          <Button
+            onClick={() => handleDirectDecision("reject")}
+            className={`h-11 flex-1 font-semibold text-white transition-all ${
+              decision === "reject"
+                ? "bg-[#ef4444] ring-2 ring-[#ef4444]/50"
+                : !isJustified
+                  ? "bg-[#ef4444] hover:bg-[#ef4444]/90"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-200"
+            }`}
+          >
+            <X className="size-4 mr-1.5" />
+            Reject Order {!isJustified && "(Recommended)"}
+          </Button>
+        </div>
+      )}
 
       {/* Post-Decision Feedback & Download Banners */}
       {decision === "accept" && (

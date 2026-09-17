@@ -13,6 +13,7 @@ export default function Page() {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [protocol, setProtocol] = useState<string>(PROTOCOLS[0])
   const [action, setAction] = useState("")
+  const [disqualifiedIds, setDisqualifiedIds] = useState<string[]>([])
 
   function handleSubmit(p: IntakePatient, proto: string, proposedAction: string) {
     setPatient({
@@ -34,16 +35,32 @@ export default function Page() {
     setView("adjudication")
   }
 
+  function handleDisqualify(id: string) {
+    setDisqualifiedIds((prev) => Array.from(new Set([...prev, id])))
+    setView("intake")
+  }
+
+  function handleUpdatePatient(updated: Partial<Patient>) {
+    setPatient((prev) => (prev ? { ...prev, ...updated } : null))
+  }
+
   if (view === "adjudication" && patient) {
     return (
       <AdjudicationConsole
         patient={patient}
         protocol={protocol}
-          action={action}
+        action={action}
         onBack={() => setView("intake")}
+        onDisqualifyPatient={handleDisqualify}
+        onUpdatePatient={handleUpdatePatient}
       />
     )
   }
 
-  return <IntakeView onSubmit={handleSubmit} />
+  return (
+    <IntakeView
+      onSubmit={handleSubmit}
+      disqualifiedIds={disqualifiedIds}
+    />
+  )
 }

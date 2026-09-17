@@ -345,6 +345,10 @@ async def start_run(payload: dict) -> dict:
     rag_output = payload.get("rag_output") or payload.get("ragOutput") or payload
     normalized_rag_output = _simulated_rag_output(patient_id, rag_output)
     normalized_rag_output["original_prescribed_action"] = normalized_rag_output.get("prescribed_action", "")
+    if "resupply_attempts" in payload:
+        normalized_rag_output["resupply_attempts"] = payload["resupply_attempts"]
+    if "max_iters" in payload:
+        normalized_rag_output["max_iters"] = payload["max_iters"]
     runs[patient_id] = {
         "events": [],
         "completed": False,
@@ -450,6 +454,63 @@ async def resume_orchestrator(payload: dict):
         report_history=report_history,
     ))
     return {"status": "success", "patientId": patient_id}
+ 
+ 
+@router.post("/api/orchestrator/resupply")
+async def resupply_orchestrator(payload: dict):
+    patient_id = payload.get("patientId") or payload.get("patient_id")
+    if not patient_id:
+        raise HTTPException(status_code=400, detail="patientId is required")
+
+    resupplied = payload.get("resupplied", {})
+    attempt_number = int(payload.get("attempt_number", 1))
+    max_iters = int(payload.get("max_iters", 3))
+
+    previous_state = runs.get(patient_id)
+    if previous_state and previous_state.get("rag_output"):
+        rag_output = copy.deepcopy(previous_state["rag_output"])
+    else:
+        rag_output = _simulated_rag_output(patient_id, payload)
+
+    rag_output["resupply_attempts"] = attempt_number
+    rag_output["max_iters"] = max_iters
+
+    # Update patient clinical attributes in rule_analysis_package
+    patient_pkg = rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})
+    if "age" in resupplied and resupplied["age"] is not None and str(resupplied["age"]).strip() != "":
+        try:
+            val = float(resupplied["age"])
+            patient_pkg["age"] = int(val) if val.is_integer() else val
+        except (ValueError, TypeError):
+            patient_pkg["age"] = resupplied["age"]
+    if "sex" in resupplied and resupplied["sex"]:
+        patient_pkg["sex"] = str(resupplied["sex"]).strip().lower()
+
+    if patient_id in run_tasks and not run_tasks[patient_id].done():
+        run_tasks[patient_id].cancel()
+
+    report_history = previous_state.get("report_history", []) if previous_state else []
+    runs[patient_id] = {
+        "events": [],
+        "completed": False,
+        "result": None,
+        "rag_output": copy.deepcopy(rag_output),
+        "report_history": report_history,
+    }
+    run_tasks[patient_id] = asyncio.create_task(
+        _execute_run(
+            patient_id,
+            rag_output,
+            modification=payload.get("justification", f"FHIR demographic resupply attempt {attempt_number} of {max_iters}"),
+            report_history=report_history,
+        )
+    )
+    return {
+        "status": "resupplying",
+        "patientId": patient_id,
+        "attempt_number": attempt_number,
+        "max_iters": max_iters,
+    }
 
 
 @router.post("/api/orchestrator/checkpoint")
