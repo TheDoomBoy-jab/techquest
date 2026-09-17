@@ -1,3 +1,5 @@
+import { TrialGuardLogo } from "@/components/trialguard-logo"
+
 type Report = {
     report_id?: string
     saved_at?: string
@@ -28,27 +30,33 @@ export default async function ReportPage({ params }: { params: Promise<{ patient
 
     return (
         <main className="min-h-screen bg-[#121212] px-4 py-8 text-white md:px-8">
-            <div className="mx-auto max-w-6xl space-y-5">
-                <header className="rounded-xl border border-[#2e2e2e] bg-[#1e1e1e] p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#60a5fa]">TrialGuard / Regulatory Final Report</p>
-                        <a href="/" className="text-xs text-slate-400 hover:text-white transition-colors">
+            <div className="mx-auto max-w-6xl space-y-6">
+                <header className="rounded-2xl border border-[#2e2e2e] bg-[#181818] p-6 md:p-8 space-y-6 shadow-2xl">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#282828] pb-4">
+                        <TrialGuardLogo className="h-8 w-auto" showSubtitle />
+                        <a href="/" className="inline-flex items-center gap-1.5 rounded-lg border border-[#333] bg-[#121212] px-3.5 py-1.5 text-xs text-slate-300 hover:bg-[#222] hover:text-white transition-colors">
                             &larr; Back to Adjudication Console
                         </a>
                     </div>
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-semibold">Adjudication Report</h1>
-                            <p className="mt-1 font-mono text-sm text-slate-400">Patient {patientId} · Trial {report?.trial_id ?? "Not available"}</p>
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-400 font-mono">
+                                21 CFR Part 11 Audit Trail
+                            </span>
+                            <h1 className="text-3xl font-bold text-white tracking-tight mt-1">Official Clinical Adjudication Report</h1>
+                            <p className="mt-1 font-mono text-sm text-slate-400">Patient {patientId} · Trial Protocol {report?.trial_id ?? "NCT02415400"}</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <StatusBadge value={report?.final_verdict ?? "REPORT_UNAVAILABLE"} />
                             <a
                                 href={`http://localhost:8000/api/reports/${encodeURIComponent(patientId)}/pdf`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 shadow-md transition-all"
+                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-lg shadow-emerald-950/40 transition-all"
                             >
+                                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
                                 Download Official PDF (21 CFR Part 11)
                             </a>
                         </div>
@@ -103,22 +111,55 @@ export default async function ReportPage({ params }: { params: Promise<{ patient
 }
 
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
-    return <section className="rounded-xl border border-[#2e2e2e] bg-[#1e1e1e] p-5"><h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2><div className="space-y-3">{children}</div></section>
+    return (
+        <section className="rounded-xl border border-[#282828] bg-[#181818] p-6 space-y-4 shadow-md">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-[#242424] pb-2.5">
+                {title}
+            </h2>
+            <div className="space-y-3 pt-1">{children}</div>
+        </section>
+    )
 }
 
 function AgentReport({ title, data }: { title: string; data?: Record<string, unknown> }) {
-    return <ReportSection title={title}><StatusBadge value={String(data?.compliance_status ?? data?.safety_status ?? "UNKNOWN")} /><Detail label="Explanation" value={String(data?.explanation ?? "No explanation was returned.")} /><JsonList data={data?.violations ?? data?.concerns ?? data?.evidence} /></ReportSection>
+    return (
+        <ReportSection title={title}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <StatusBadge value={String(data?.compliance_status ?? data?.safety_status ?? "UNKNOWN")} />
+            </div>
+            <Detail label="Clinical Explanation" value={String(data?.explanation ?? "No explanation was returned.")} />
+            <JsonList data={data?.violations ?? data?.concerns ?? data?.evidence} />
+        </ReportSection>
+    )
 }
 
 function Detail({ label, value }: { label: string; value?: string }) {
-    return <div><p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 break-words text-sm leading-6 text-slate-200">{value ?? "Not available"}</p></div>
+    return (
+        <div className="space-y-1">
+            <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">{label}</p>
+            <p className="break-words text-sm leading-relaxed text-slate-200">{value ?? "Not available"}</p>
+        </div>
+    )
 }
 
 function StatusBadge({ value }: { value: string }) {
-    return <span className="inline-flex rounded-full border border-[#3b82f6]/40 bg-[#3b82f6]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#93c5fd]">{value.replaceAll("_", " ")}</span>
+    const isPass = value.includes("PASSED") || value.includes("COMPLIANT") || value.includes("SAFE") || value.includes("JUSTIFIED")
+    return (
+        <span className={`inline-flex rounded-full px-3 py-1 font-mono text-xs font-bold uppercase tracking-wider border ${
+            isPass
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-400"
+        }`}>
+            {value.replaceAll("_", " ")}
+        </span>
+    )
 }
 
 function JsonList({ data }: { data: unknown }) {
-    if (!data || (Array.isArray(data) && data.length === 0)) return <p className="text-sm text-slate-500">None reported.</p>
-    return <pre className="max-h-96 overflow-auto rounded-lg border border-[#2e2e2e] bg-[#121212] p-3 text-xs leading-6 text-slate-300">{JSON.stringify(data, null, 2)}</pre>
+    if (!data || (Array.isArray(data) && data.length === 0)) return <p className="text-xs text-slate-500 italic">None reported.</p>
+    return (
+        <pre className="max-h-96 overflow-auto rounded-xl border border-[#282828] bg-[#0d0d0d] p-3.5 font-mono text-xs leading-relaxed text-slate-300">
+            {JSON.stringify(data, null, 2)}
+        </pre>
+    )
 }

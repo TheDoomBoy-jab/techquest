@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { DecisionGateway } from "@/components/decision-gateway"
 import { ExecutionStream } from "@/components/execution-stream"
 import { OrchestrationGraph } from "@/components/orchestration-graph"
+import { TrialGuardLogo } from "@/components/trialguard-logo"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
 
@@ -79,55 +80,61 @@ export function AdjudicationConsole({
   return (
     <div className="min-h-screen bg-[#121212] text-white">
       {/* Top context header */}
-      <header className="border-b border-[#2e2e2e] px-4 py-3 md:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <header className="border-b border-[#282828] bg-[#161616]/90 backdrop-blur-sm px-5 py-4 md:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <TrialGuardLogo className="h-8 w-auto" showSubtitle />
+            <div className="hidden h-6 w-px bg-[#2e2e2e] md:block" />
             <Button
               variant="outline"
               size="sm"
               onClick={onBack}
-              className="border-[#2e2e2e] bg-[#1e1e1e] text-slate-300 hover:bg-[#2a2a2a] hover:text-white"
+              className="border-[#2e2e2e] bg-[#1e1e1e] text-slate-300 hover:bg-[#2a2a2a] hover:text-white text-xs"
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-3.5 mr-1.5" />
               Back to Patient Lookup
             </Button>
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold">
+            <div className="hidden lg:block">
+              <p className="text-xs font-semibold text-slate-300">
                 Adjudication Console{" "}
-                <span className="text-slate-500">/ Human-In-the-Loop Review</span>
+                <span className="text-slate-500 font-normal">/ Multi-Agent Human-In-the-Loop Review</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-2.5 py-1 font-mono text-[11px] text-slate-300">
-              PATIENT ID: {patient.id}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-3 py-1 font-mono text-[11px] text-slate-300">
+              PATIENT ID: <strong className="text-white font-bold">{patient.id}</strong>
             </span>
-            <span className="rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-2.5 py-1 font-mono text-[11px] text-slate-300">
-              FDA PROTOCOL ID: {protocolId}
+            <span className="rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-3 py-1 font-mono text-[11px] text-slate-300">
+              PROTOCOL: <strong className="text-white font-bold">{protocolId}</strong>
             </span>
-            <span className="hidden rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-2.5 py-1 text-[11px] text-slate-300 md:inline">
+            <span className="hidden rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-3 py-1 text-[11px] text-slate-400 xl:inline">
               Site 04 · Massachusetts General
             </span>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-full border border-[#10b981]/30 bg-[#10b981]/10 px-3 py-1">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#10b981] opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-[#10b981]" />
-            </span>
-            <span className="text-[11px] font-medium text-[#10b981]">
-              Live Telemetry
-            </span>
+            <div className="flex items-center gap-2 rounded-full border border-[#10b981]/30 bg-[#10b981]/10 px-3 py-1">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#10b981] opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-[#10b981]" />
+              </span>
+              <span className="text-[11px] font-semibold text-[#10b981]">
+                Live Telemetry
+              </span>
+            </div>
           </div>
         </div>
 
-        <p className="mt-2 text-xs text-slate-400">
-          Adjudication Queue: {patient.cohort} · 1 of 7 pending review
-        </p>
+        <div className="mt-2.5 flex items-center justify-between border-t border-[#222] pt-2 text-xs text-slate-400">
+          <p>
+            Adjudication Queue: <span className="font-medium text-slate-300">{patient.cohort}</span> · 1 of 7 pending review
+          </p>
+          <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+            21 CFR Part 11 Active Session
+          </span>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <main className="mx-auto max-w-7xl space-y-8 p-6 md:p-8">
         {/* Full-width Expansive React Flow Block */}
         <OrchestrationGraph
           patientId={patient.id}

@@ -7,10 +7,26 @@ import io
 import time
 from typing import Any, Dict, List, Optional
 
+from pathlib import Path
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, Image as RLImage
+
+
+LOGO_PATHS = [
+    Path(__file__).resolve().parent / "assets" / "trialguard-logo.png",
+    Path(__file__).resolve().parents[2] / "apps" / "web" / "public" / "trialguard-logo.png",
+    Path("/Users/aahannayak/RESOURCE/techquest/apps/web/public/trialguard-logo.png"),
+]
+
+
+def _find_logo_path() -> Optional[str]:
+    for p in LOGO_PATHS:
+        if p.exists():
+            return str(p)
+    return None
 
 
 def generate_adjudication_pdf_bytes(report_payload: Dict[str, Any]) -> io.BytesIO:
@@ -35,16 +51,16 @@ def generate_adjudication_pdf_bytes(report_payload: Dict[str, Any]) -> io.BytesI
         "DocTitle",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=20,
-        leading=24,
+        fontSize=16,
+        leading=20,
         textColor=colors.HexColor("#1A365D"),
     )
     subtitle_style = ParagraphStyle(
         "DocSubtitle",
         parent=normal,
         fontName="Helvetica",
-        fontSize=10,
-        leading=14,
+        fontSize=9,
+        leading=13,
         textColor=colors.HexColor("#4A5568"),
     )
     h2_style = ParagraphStyle(
@@ -98,14 +114,42 @@ def generate_adjudication_pdf_bytes(report_payload: Dict[str, Any]) -> io.BytesI
         doc_sub = "Regulatory Compliance: 21 CFR Part 11 Electronic Records & Signatures"
         hr_color = colors.HexColor("#2B6CB0")
 
-    story.append(Paragraph(doc_title, title_style))
-    story.append(
-        Paragraph(
-            f"{doc_sub} | Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
-            subtitle_style,
+    logo_file = _find_logo_path()
+    if logo_file:
+        logo_img = RLImage(logo_file, width=80, height=50.6)
+        header_table = Table(
+            [
+                [
+                    logo_img,
+                    [
+                        Paragraph(doc_title, title_style),
+                        Spacer(1, 3),
+                        Paragraph(
+                            f"{doc_sub} | Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
+                            subtitle_style,
+                        ),
+                    ],
+                ]
+            ],
+            colWidths=[90, 442],
         )
-    )
-    story.append(Spacer(1, 8))
+        header_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(header_table)
+    else:
+        story.append(Paragraph(doc_title, title_style))
+        story.append(
+            Paragraph(
+                f"{doc_sub} | Generated: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}",
+                subtitle_style,
+            )
+        )
+    story.append(Spacer(1, 6))
     story.append(HRFlowable(width="100%", thickness=2, color=hr_color, spaceAfter=12))
 
     # 2. Patient & Protocol Metadata Table

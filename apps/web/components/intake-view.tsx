@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { PROTOCOLS, PATIENTS } from "@/lib/clinical-data"
 import { getPatientsFromSupabase } from "@/app/actions"
+import { TrialGuardLogo } from "@/components/trialguard-logo"
 
 export type Patient = {
   patient_id: string
@@ -219,32 +220,29 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
-      <header className="flex items-center justify-between border-b border-[#2e2e2e] px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-md border border-[#2e2e2e] bg-[#1e1e1e]">
-            <Activity className="size-4 text-[#3b82f6]" />
+      <header className="flex flex-wrap items-center justify-between border-b border-[#262626] bg-[#141414]/95 px-6 py-4 backdrop-blur gap-4">
+        <TrialGuardLogo className="h-9 w-auto" showSubtitle />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 font-mono text-[11px] text-emerald-400">
+            <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>FHIR EMR Ingress Active</span>
           </div>
-          <div>
-            <p className="text-sm font-semibold leading-tight">
-              Clinical Adjudication System
-            </p>
-            <p className="text-xs text-slate-400">Intake Portal</p>
-          </div>
+          <span className="rounded-full border border-[#2e2e2e] bg-[#1a1a1a] px-3.5 py-1 text-xs font-medium text-slate-300">
+            Site 04 — Massachusetts General Hospital
+          </span>
         </div>
-        <span className="rounded-full border border-[#2e2e2e] bg-[#1e1e1e] px-3 py-1 text-xs font-medium text-slate-300">
-          Site 04 — Massachusetts General
-        </span>
       </header>
 
-      <main className="px-4 pb-16">
-        <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-[#2e2e2e] bg-[#1e1e1e] p-6">
-          <h1 className="text-lg font-semibold text-balance">
-            Initiate Patient Adjudication Session
-          </h1>
-          <p className="mt-1 text-sm text-slate-400 text-pretty">
-            Look up a trial participant and submit a proposed clinical action for
-            multi-agent AI review before human adjudication.
-          </p>
+      <main className="px-4 pb-20 pt-8">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[#2a2a2a] bg-[#161616] p-7 md:p-9 shadow-2xl space-y-7">
+          <div className="border-b border-[#262626] pb-5">
+            <h1 className="text-xl font-bold tracking-tight text-white md:text-2xl">
+              Initiate Patient Adjudication Session
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-400 leading-relaxed">
+              Query trial subjects from the EHR/FHIR repository, review baseline clinical telemetry, and submit proposed medication orders for autonomous multi-agent consensus review.
+            </p>
+          </div>
 
           {/* Patient lookup combobox */}
           <div className="mt-6">
@@ -394,82 +392,93 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
 
           {/* Selected patient details */}
           {selected && (
-            <div className="mt-5 rounded-lg border border-[#2e2e2e] bg-[#121212] p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222] pb-2.5">
-                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[#10b981]">
-                  <Check className="size-3.5" />
-                  Patient Selected
-                </p>
+            <div className="rounded-xl border border-[#303030] bg-gradient-to-b from-[#181818] to-[#121212] p-5 md:p-6 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#262626] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                    <Check className="size-3.5" />
+                  </div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Subject Profile Loaded · Verified EMR Record
+                  </span>
+                </div>
                 {selected.patient_id === "P034" && (
-                  <span className="rounded-md border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-300">
-                    TEST SCENARIO: Guardrail-1 Ingress Failure
+                  <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
+                    TEST CASE: Guardrail-1 Ingress Failure
                   </span>
                 )}
                 {selected.patient_id === "P035" && (
-                  <span className="rounded-md border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-300">
-                    TEST SCENARIO: Guardrail-2 Hard Boundary Breach
+                  <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
+                    TEST CASE: Guardrail-2 Hard Boundary Breach
                   </span>
                 )}
                 {selected.patient_id === "P036" && (
-                  <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300">
-                    TEST SCENARIO: Protocol & RAG Rules Non-Compliance
+                  <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                    TEST CASE: Protocol & RAG Rules Non-Compliance
                   </span>
                 )}
                 {selected.patient_id === "P037" && (
-                  <span className="rounded-md border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-purple-300">
-                    TEST SCENARIO: 4 A2A Pipelines Consensus Rejection
+                  <span className="rounded-full border border-purple-500/40 bg-purple-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300">
+                    TEST CASE: 4 A2A Pipelines Consensus Rejection
                   </span>
                 )}
               </div>
 
               {/* Specific Scenario Notice Box */}
               {selected.patient_id === "P034" && (
-                <div className="rounded border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300 leading-relaxed">
-                  <strong>Mandatory Demographics Missing:</strong> Age is unrecorded and sex is empty. Designed to test <strong>Guardrail-1 Ingress Validation</strong> failure per 21 CFR 312.62.
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Mandatory Demographics Missing:</strong> Patient age is unrecorded and biological sex is empty. Designed to trigger <strong>Guardrail-1 Ingress Validation</strong> failure per 21 CFR 312.62. Clinician resupply console will activate during adjudication session.
                 </div>
               )}
               {selected.patient_id === "P035" && (
-                <div className="rounded border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300 leading-relaxed">
-                  <strong>Catastrophic Boundary Breach:</strong> ALT is <strong>620.0 U/L</strong> (&gt;5x ULN) and AST is <strong>480.0 U/L</strong>. Designed to test <strong>Guardrail-2 Immediate Short-Circuit</strong>.
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Catastrophic Boundary Breach:</strong> ALT is <strong>620.0 U/L</strong> (&gt;5x ULN) and AST is <strong>480.0 U/L</strong>. Designed to trigger <strong>Guardrail-2 Immediate Short-Circuit</strong> and stop drug administration.
                 </div>
               )}
               {selected.patient_id === "P036" && (
-                <div className="rounded border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-300 leading-relaxed">
-                  <strong>Protocol Rule Violation:</strong> Prescribed dose is <strong>40 mg BID</strong> (exceeds 5 mg limit) and patient suffered acute hemorrhage <strong>12 days ago</strong> (violates 30-day washout).
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
+                  <strong className="text-amber-300">Protocol Rule Violation:</strong> Prescribed dose is <strong>40 mg BID</strong> (exceeds 5 mg limit) and patient suffered acute hemorrhage <strong>12 days ago</strong> (violates 30-day washout).
                 </div>
               )}
               {selected.patient_id === "P037" && (
-                <div className="rounded border border-purple-500/30 bg-purple-500/10 p-2.5 text-xs text-purple-300 leading-relaxed">
-                  <strong>Unanimous 4-Agent Rejection:</strong> Unapproved biologic escalation (400 mg Q3W), active Grade 3 colitis + Ketoconazole DDI, and <strong>$48,500</strong> uncovered patient exposure.
+                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
+                  <strong className="text-purple-300">Unanimous 4-Agent Rejection:</strong> Unapproved biologic escalation (400 mg Q3W), active Grade 3 colitis + Ketoconazole DDI, and <strong>$48,500</strong> uncovered patient liability.
                 </div>
               )}
 
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-3 pt-1">
-                <Detail label="Full Name" value={selected.name} />
-                <Detail label="DOB" value={selected.dob} />
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-3 pt-1">
+                <Detail label="Subject Name" value={selected.name} />
+                <Detail label="Date of Birth" value={selected.dob} />
                 <Detail
-                  label="Age / Sex"
+                  label="Age / Biological Sex"
                   value={
                     selected.patient_id === "P034"
                       ? "Unrecorded / Missing (21 CFR 312.62 Breach)"
-                      : `${selected.age} / ${selected.sex}`
+                      : `${selected.age} yrs / ${selected.sex === "F" ? "Female" : selected.sex === "M" ? "Male" : selected.sex}`
                   }
                   emphasis={selected.patient_id === "P034"}
                 />
-                <Detail label="Cohort" value={selected.cohort} />
-                <Detail label="Primary Diagnosis" value={selected.diagnosis} />
+                <Detail label="Stratification Cohort" value={selected.cohort} />
+                <Detail label="Primary Pathology" value={selected.diagnosis} />
                 <Detail
-                  label="Renal Function (CrCl)"
+                  label="Renal Clearance (CrCl)"
                   value={selected.creatinine || "CrCl 55 mL/min"}
                   emphasis={Boolean(selected.creatinine?.includes("22") || selected.creatinine?.includes("< 30"))}
                 />
                 {selected.medications && selected.medications.length > 0 && (
-                  <div className="col-span-2 md:col-span-3">
-                    <dt className="text-[11px] uppercase tracking-wide text-slate-500">
-                      Active Baseline Medications
+                  <div className="col-span-2 md:col-span-3 pt-2 border-t border-[#262626]">
+                    <dt className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">
+                      Active EMR Medications (Formulary Baseline)
                     </dt>
-                    <dd className="mt-0.5 text-xs text-slate-300">
-                      {selected.medications.join(" · ")}
+                    <dd className="flex flex-wrap gap-1.5">
+                      {selected.medications.map((m, idx) => (
+                        <span
+                          key={idx}
+                          className="rounded-md border border-[#333] bg-[#1a1a1a] px-2.5 py-1 text-xs font-medium text-slate-200"
+                        >
+                          💊 {m}
+                        </span>
+                      ))}
                     </dd>
                   </div>
                 )}
