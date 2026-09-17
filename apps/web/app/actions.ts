@@ -32,6 +32,60 @@ export type ProtocolViolation = {
   observed: string
   limit: string
   reference: string
+  reason?: string
+}
+
+export type Guardrail1Result = {
+  passed: boolean
+  status: "PASSED" | "FAILED"
+  missing_fields: string[]
+  reason: string
+  regulatory_citation: string
+  action_required: string
+}
+
+export type Guardrail2Breach = {
+  rule_id: string
+  parameter: string
+  observed: string
+  limit: string
+  difference: string
+  severity: string
+  reason: string
+}
+
+export type Guardrail2Result = {
+  passed: boolean
+  status: "PASSED" | "BREACHED"
+  short_circuited: boolean
+  breached_boundaries: Guardrail2Breach[]
+  reason: string
+  regulatory_citation: string
+  action_required: string
+}
+
+export type RagRuleViolation = {
+  rule_id: string
+  parameter: string
+  observed: string
+  limit: string
+  difference: string
+  reference: string
+  reason: string
+}
+
+export type RagRuleResult = {
+  compliant: boolean
+  status: "COMPLIANT" | "NON_COMPLIANT"
+  violations: RagRuleViolation[]
+  reason: string
+}
+
+export type AgentDiscrepancies = {
+  has_discrepancy: boolean
+  consensus_status: "UNANIMOUS_CONSENSUS_JUSTIFIED" | "CONSENSUS_REJECTED"
+  dissenting_agents: string[]
+  reasons: Record<string, string>
 }
 
 export type ArbitrationResult = {
@@ -84,6 +138,10 @@ export type ArbitrationResult = {
     concerns?: Array<Record<string, unknown>>
   }>
   modifications?: Array<Record<string, unknown>>
+  guardrail_1_result?: Guardrail1Result
+  guardrail_2_result?: Guardrail2Result
+  rag_rule_result?: RagRuleResult
+  agent_discrepancies?: AgentDiscrepancies
 }
 
 export async function getArbitrationResult(patientId: string): Promise<ArbitrationResult> {
