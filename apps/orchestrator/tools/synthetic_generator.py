@@ -589,16 +589,23 @@ def push_to_supabase(target_table: str = "patients") -> None:
             if isinstance(mapped, dict) and mapped.get("name")
             else entry.get("name") or p.get("name") or "Unknown"
         )
+        raw_dob = p.get("birth_date") or p.get("dob")
+        dob_val = raw_dob if (raw_dob and str(raw_dob).count("-") == 2) else None
+        age_val = p.get("age") if (p.get("age") is not None and isinstance(p.get("age"), (int, float)) and p.get("age") > 0) else None
+        sex_val = p.get("sex") if (p.get("sex") and str(p.get("sex")).strip().lower() not in {"unknown", "unrecorded", "none", ""}) else None
+        diagnoses = p.get("diagnoses", ["Unknown"])
+        primary_dx = diagnoses[0] if diagnoses else entry.get("diagnosis", "Unknown")
+
         rows.append({
             "patient_id": pid,
             "trial_id": entry.get("assigned_demo_trial_id") or "NCT02415400",
             "name": resolved_name,
-            "dob": p.get("birth_date"),
-            "age": p.get("age"),
-            "sex": p.get("sex"),
+            "dob": dob_val,
+            "age": age_val,
+            "sex": sex_val,
             "cohort": entry.get("cohort"),
-            "diagnosis": p.get("diagnoses", ["Unknown"])[0],
-            "fhir_id": str(mapped.get("fhir_id") or entry.get("fhir_id")),
+            "diagnosis": primary_dx,
+            "fhir_id": str(mapped.get("fhir_id") or entry.get("fhir_id") or f"synthetic-{pid}"),
             "assigned_demo_trial_id": entry.get("assigned_demo_trial_id"),
             "demo_category": "SYNTHETIC_EHR",
             "clinical_data": p,
