@@ -1,12 +1,14 @@
 "use client"
 import { CheckCircle2, Clock3, Info, Loader2 } from "lucide-react"
 import { AGENTS, type AgentCard } from "@/lib/clinical-data"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { getGatewayUrl } from "@/lib/api-config"
-import { getArbitrationResult } from "@/app/actions"
+import { getArbitrationResult, type ArbitrationResult } from "@/app/actions"
 
 type Props = {
   patientId: string
+  action?: string
+  onComplete?: (result: ArbitrationResult) => void
 }
 type AgentResult = {
   explanation?: string
@@ -23,11 +25,21 @@ type AgentView = Pick<AgentCard, "name"> & Partial<Omit<AgentCard, "name">> & {
   financialExposure?: number
 }
 
-export function ExecutionStream({ patientId }: Props) {
+export function ExecutionStream({ patientId, action, onComplete }: Props) {
   const [agents, setAgents] = useState<AgentView[]>(() =>
     AGENTS.map(({ name }) => ({ name }))
   )
   const [connectionState, setConnectionState] = useState<"connecting" | "open" | "error">("connecting")
+  const actionRef = useRef(action)
+  const onCompleteRef = useRef(onComplete)
+
+  useEffect(() => {
+    actionRef.current = action
+  }, [action])
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
 
   useEffect(() => {
     setAgents(AGENTS.map(({ name }) => ({ name })))
@@ -40,8 +52,21 @@ export function ExecutionStream({ patientId }: Props) {
     eventSource.onmessage = (event) => {
       try {
         const updatedAgent = JSON.parse(event.data)
-        setAgents((prevAgents) => prevAgents.map((agent) => agent.name === updatedAgent.name ? { ...agent, ...updatedAgent } : agent))
-        if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") eventSource.close()
+        setAgents((prevAgents) => prevAgents.map((agent) => {
+          if (agent.name !== updatedAgent.name) return agent
+
+          const nextAgent = { ...agent, ...updatedAgent }
+          if (updatedAgent.status === "completed") {
+            delete nextAgent.subtext
+          }
+          return nextAgent
+        }))
+        if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") {
+          getArbitrationResult(patientId, actionRef.current)
+            .then((result) => onCompleteRef.current?.(result))
+            .catch((error) => console.error("Failed to load completed arbitration result:", error))
+          eventSource.close()
+        }
       } catch (error) { console.error("Failed to parse SSE data:", error) }
     }
     eventSource.onerror = () => {
@@ -175,7 +200,7 @@ export function ExecutionStream({ patientId }: Props) {
                     </div>
                   )}
 
-                  {agent.subtext && (
+                  {agent.subtext && agent.status !== "completed" && (
                     <p className="mt-2 font-mono text-[11px] text-[#3b82f6]/80">
                       {agent.subtext}
                     </p>

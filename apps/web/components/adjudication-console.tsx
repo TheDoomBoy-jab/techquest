@@ -89,6 +89,9 @@ export function AdjudicationConsole({
   }
 
   const handleArbitrationComplete = (result: ArbitrationResult) => {
+    if (!result || (!result.final_verdict && !result.patientId && !result.patient_profile)) {
+      return
+    }
     if (result?.prescribed_action && result.prescribed_action !== currentAction) {
       setCurrentAction(result.prescribed_action)
       onUpdatePatient?.({ action: result.prescribed_action })
@@ -191,7 +194,12 @@ export function AdjudicationConsole({
         )}
 
         {/* Detailed Chronological Execution Stream */}
-        <ExecutionStream patientId={patient.id} key={streamKey} />
+        <ExecutionStream
+          patientId={patient.id}
+          action={currentAction}
+          key={streamKey}
+          onComplete={(result) => setArbitrationResult(result)}
+        />
       </main>
     </div>
   )

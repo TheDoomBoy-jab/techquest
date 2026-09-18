@@ -608,8 +608,6 @@ function InnerFlowCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.15 }}
       minZoom={0.15}
       maxZoom={1.6}
       proOptions={{ hideAttribution: true }}
@@ -646,6 +644,16 @@ export function OrchestrationGraph({
   const [selectedInspector, setSelectedInspector] = useState<any | null>(null)
   const [copiedAudit, setCopiedAudit] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const currentActionRef = useRef(action || "")
+  const onArbitrationCompleteRef = useRef(onArbitrationComplete)
+
+  useEffect(() => {
+    currentActionRef.current = currentAction
+  }, [currentAction])
+
+  useEffect(() => {
+    onArbitrationCompleteRef.current = onArbitrationComplete
+  }, [onArbitrationComplete])
 
   useEffect(() => {
     setIsMounted(true)
@@ -686,7 +694,7 @@ export function OrchestrationGraph({
     setReducerState({ name: REDUCER_NAME, status: "pending" })
 
     const baseUrl = getGatewayUrl()
-    const activeDose = currentAction || action || ""
+    const activeDose = currentActionRef.current || action || ""
     const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}${activeDose ? `&action=${encodeURIComponent(activeDose)}` : ""}`
     const eventSource = new EventSource(streamUrl)
 
@@ -700,7 +708,7 @@ export function OrchestrationGraph({
           if (arb?.prescribed_action) {
             setCurrentAction(arb.prescribed_action)
           }
-          onArbitrationComplete(arb)
+          onArbitrationCompleteRef.current(arb)
         })
         .catch((error) => console.error("Failed to load arbitration result:", error))
     }
@@ -792,7 +800,7 @@ export function OrchestrationGraph({
             latency: "520ms",
             confidence: "96%",
           })
-          onArbitrationComplete(arb)
+          onArbitrationCompleteRef.current(arb)
         })
         .catch((error) => {
           console.error("Failed to load arbitration fallback:", error)
@@ -804,7 +812,7 @@ export function OrchestrationGraph({
       clearTimeout(safetyTimer)
       eventSource.close()
     }
-  }, [patientId, restartSignal, action, currentAction, onArbitrationComplete])
+  }, [patientId, restartSignal])
 
   // Specialist States
   const compliance = agentsState["Protocol Compliance Agent"] || {
