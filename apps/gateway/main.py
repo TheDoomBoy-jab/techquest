@@ -26,6 +26,7 @@ app.include_router(a2a_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://techquest-roan.vercel.app",
         "https://techquest-roan.vercel.app:3000",
         "https://techquest-roan.vercel.app:8000",
         "http://localhost:3000",

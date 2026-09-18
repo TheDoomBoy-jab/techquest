@@ -90,11 +90,16 @@ async def extract_recent_action(text: str, default_drug: str | None = None) -> d
         }
 
 
+COMPLIANCE_URL_BASE = (os.getenv("A2A_COMPLIANCE_URL") or os.getenv("COMPLIANCE_AGENT_URL") or "http://127.0.0.1:8001").rstrip("/")
+SAFETY_URL_BASE = (os.getenv("A2A_SAFETY_URL") or os.getenv("SAFETY_AGENT_URL") or "http://127.0.0.1:8002").rstrip("/")
+FINANCIAL_URL_BASE = (os.getenv("A2A_FINANCIAL_URL") or os.getenv("FINANCIAL_AGENT_URL") or "http://127.0.0.1:8003").rstrip("/")
+
 TASK_PORTS: dict[str, list[str]] = {
-    "compliance": ["http://127.0.0.1:8001/rpc", "http://127.0.0.1:8001/"],
-    "safety": ["http://127.0.0.1:8002/rpc", "http://127.0.0.1:8002/"],
-    "financial": ["http://127.0.0.1:8003/rpc", "http://127.0.0.1:8003/"],
+    "compliance": [f"{COMPLIANCE_URL_BASE}/rpc", f"{COMPLIANCE_URL_BASE}/"] if not COMPLIANCE_URL_BASE.endswith("/rpc") else [COMPLIANCE_URL_BASE],
+    "safety": [f"{SAFETY_URL_BASE}/rpc", f"{SAFETY_URL_BASE}/"] if not SAFETY_URL_BASE.endswith("/rpc") else [SAFETY_URL_BASE],
+    "financial": [f"{FINANCIAL_URL_BASE}/rpc", f"{FINANCIAL_URL_BASE}/"] if not FINANCIAL_URL_BASE.endswith("/rpc") else [FINANCIAL_URL_BASE],
 }
+
 
 
 def _route_a2a_sync(payload: dict, request_id: int) -> dict:
