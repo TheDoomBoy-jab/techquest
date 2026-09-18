@@ -37,6 +37,59 @@ type IntakeViewProps = {
   disqualifiedIds?: string[]
 }
 
+function evaluatePatientProfile(p: Patient, activeAction?: string) {
+  const missingAge = !p.age || p.age <= 0
+  const missingSex = !p.sex || p.sex.toLowerCase() === "unknown" || p.sex.trim() === ""
+  const isG1 = missingAge || missingSex
+
+  const clinical = p.clinical_data || {}
+  const labs = clinical.lab_results || {}
+  const alt = Number(labs.ALT?.value ?? labs.alt?.value ?? labs.ALT ?? labs.alt ?? 0)
+  const ast = Number(labs.AST?.value ?? labs.ast?.value ?? labs.AST ?? labs.ast ?? 0)
+  const egfr = Number(labs.eGFR?.value ?? labs.egfr?.value ?? labs.eGFR ?? labs.egfr ?? 90)
+  const bili = Number(labs.total_bilirubin?.value ?? labs.bilirubin?.value ?? labs.total_bilirubin ?? labs.bilirubin ?? 0.8)
+  const anc = Number(labs.ANC?.value ?? labs.anc?.value ?? labs.ANC ?? labs.anc ?? 3500)
+  const isG2 = !isG1 && (alt > 200 || ast > 200 || egfr < 15 || bili > 4.0 || anc < 500)
+
+  const protocolFacts = clinical.protocol_facts || {}
+  const bleedDays = protocolFacts.days_since_major_bleed !== undefined ? Number(protocolFacts.days_since_major_bleed) : 999
+  const autoimmune = Boolean(protocolFacts.active_autoimmune_disease)
+  const rawCrcl = labs.creatinine_clearance?.value ?? labs.creatinine_clearance ?? (p.creatinine ? p.creatinine.match(/\d+/)?.[0] : 65) ?? 65
+  const crclVal = Number(rawCrcl)
+
+  const act = (activeAction || "").toLowerCase()
+  const doseExceeded = act.includes("40 mg") || act.includes("40mg") || act.includes("60 mg") || act.includes("60mg") || act.includes("400 mg") || act.includes("400mg")
+  const isRagRule = !isG1 && !isG2 && (bleedDays < 30 || autoimmune || (crclVal > 0 && crclVal < 30) || doseExceeded)
+
+  const meds = Array.isArray(p.medications) ? p.medications.map((m: any) => String(m).toLowerCase()) : []
+  const hasDdi = meds.some(m => m.includes("ketoconazole") || m.includes("clarithromycin") || (m.includes("aspirin") && meds.some(m2 => m2.includes("clopidogrel"))))
+  const financialIssue = (clinical.financial?.copay > 10000) || (clinical.financial?.out_of_pocket > 10000) || (clinical.financial?.reimbursement_tier === "TIER_4_RESTRICTED")
+  const isA2A = !isG1 && !isG2 && !isRagRule && (hasDdi || financialIssue)
+
+  const isClean = !isG1 && !isG2 && !isRagRule && !isA2A
+
+  return {
+    missingAge,
+    missingSex,
+    isG1,
+    isG2,
+    isRagRule,
+    isA2A,
+    isClean,
+    alt,
+    ast,
+    egfr,
+    bili,
+    anc,
+    bleedDays,
+    autoimmune,
+    crclVal,
+    doseExceeded,
+    hasDdi,
+    financialIssue,
+  }
+}
+
 export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -48,6 +101,11 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
   const containerRef = useRef<HTMLDivElement>(null)
 
   const isDisqualified = Boolean(selected && disqualifiedIds.includes(selected.patient_id))
+
+  const selectedEval = useMemo(() => {
+    if (!selected) return null
+    return evaluatePatientProfile(selected, action)
+  }, [selected, action])
 
   useEffect(() => {
     async function fetchPatients() {
@@ -301,12 +359,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   )}
                   {results.map((p) => {
                     const isDisqualifiedItem = disqualifiedIds.includes(p.patient_id)
-                    const isG1 = ["P034", "P038", "P039", "P040"].includes(p.patient_id)
-                    const isG2 = ["P035", "P041", "P042", "P043"].includes(p.patient_id)
-                    const isRagRule = ["P036", "P044", "P045", "P046", "P047"].includes(p.patient_id)
-                    const isA2A = ["P037", "P048", "P049", "P050"].includes(p.patient_id)
-                    const isP001toP032 = /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(p.patient_id)
-                    const isClean = ["P051", "P052", "P053", "P054"].includes(p.patient_id) || isP001toP032
+                    const evalRes = evaluatePatientProfile(p)
+                    const { isG1, isG2, isRagRule, isA2A, isClean } = evalRes
                     const isNonAligned = isG1 || isG2 || isRagRule || isA2A
 
                     return (
@@ -440,28 +494,28 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     Subject Profile Loaded · Verified EMR Record
                   </span>
                 </div>
-                {["P034", "P038", "P039", "P040"].includes(selected.patient_id) && (
+                {selectedEval?.isG1 && (
                   <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
                     TEST CASE: Guardrail-1 Ingress Failure
                   </span>
                 )}
-                {["P035", "P041", "P042", "P043"].includes(selected.patient_id) && (
+                {selectedEval?.isG2 && (
                   <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
                     TEST CASE: Guardrail-2 Hard Boundary Breach
                   </span>
                 )}
-                {["P036", "P044", "P045", "P046", "P047"].includes(selected.patient_id) && (
+                {selectedEval?.isRagRule && (
                   <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
                     TEST CASE: Protocol & RAG Rules Non-Compliance
                   </span>
                 )}
-                {["P037", "P048", "P049", "P050"].includes(selected.patient_id) && (
+                {selectedEval?.isA2A && (
                   <span className="rounded-full border border-purple-500/40 bg-purple-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300">
                     TEST CASE: 4 A2A Pipelines Consensus Rejection
                   </span>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
-                  {(["P051", "P052", "P053", "P054"].includes(selected.patient_id) || /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(selected.patient_id)) && (
+                  {selectedEval?.isClean && (
                     <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300">
                       TEST CASE: 100% Unanimous Justified Pass
                     </span>
@@ -478,93 +532,54 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                 </div>
               </div>
 
-              {/* Specific Scenario Notice Box */}
-              {selected.patient_id === "P034" && (
+              {/* Dynamic Clinical Scenario Notice Box */}
+              {selectedEval?.isG1 && (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Mandatory Demographics Missing:</strong> Patient age is unrecorded and biological sex is empty. Designed to trigger <strong>Guardrail-1 Ingress Validation</strong> failure per 21 CFR 312.62. Clinician resupply console will activate during adjudication session.
+                  <strong className="text-rose-300">Mandatory Demographics Missing:</strong>{" "}
+                  {selectedEval.missingAge && selectedEval.missingSex
+                    ? "Patient age is unrecorded and biological sex is empty."
+                    : selectedEval.missingAge
+                    ? "Patient age / birth date is unrecorded."
+                    : "Biological sex is unrecorded."}{" "}
+                  Triggers <strong>Guardrail-1 Ingress Validation</strong> failure per 21 CFR 312.62. Clinician resupply console will activate during adjudication session.
                 </div>
               )}
-              {selected.patient_id === "P038" && (
+              {selectedEval?.isG2 && (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Missing Biological Sex:</strong> Age is recorded (62 yrs), but biological sex is unrecorded. Triggers <strong>Guardrail-1 Ingress Failure</strong> requiring clinician sex specification.
+                  <strong className="text-rose-300">Catastrophic Boundary Breach:</strong>{" "}
+                  {selectedEval.alt > 200 || selectedEval.ast > 200
+                    ? `ALT is ${selectedEval.alt} U/L and AST is ${selectedEval.ast} U/L (> 200 ULN limit).`
+                    : selectedEval.egfr < 15
+                    ? `eGFR is ${selectedEval.egfr} mL/min/1.73m² (< 15.0 ESRD floor).`
+                    : selectedEval.bili > 4.0
+                    ? `Total bilirubin is ${selectedEval.bili} mg/dL (> 4.0 mg/dL ceiling).`
+                    : `Absolute Neutrophil Count is ${selectedEval.anc} /µL (< 500 /µL critical hematologic floor).`}{" "}
+                  Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong> stopping drug administration.
                 </div>
               )}
-              {selected.patient_id === "P039" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Missing Patient Age:</strong> Sex is recorded (Male), but age/DOB is missing. Triggers <strong>Guardrail-1 Ingress Failure</strong> requiring clinician age specification for PK margin evaluation.
-                </div>
-              )}
-              {selected.patient_id === "P040" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Multiple Ingress Deficits:</strong> Both age and biological sex are unrecorded. Triggers dual-attribute <strong>Guardrail-1 Ingress Failure</strong>.
-                </div>
-              )}
-              {selected.patient_id === "P035" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Catastrophic Boundary Breach:</strong> ALT is <strong>620.0 U/L</strong> (&gt;5x ULN) and AST is <strong>480.0 U/L</strong>. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong> stopping drug administration.
-                </div>
-              )}
-              {selected.patient_id === "P041" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Catastrophic Renal Failure:</strong> eGFR is <strong>11.0 mL/min/1.73m2</strong> (&lt; 15.0 ESRD floor) and serum creatinine is 5.2 mg/dL. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong>.
-                </div>
-              )}
-              {selected.patient_id === "P042" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Severe Hyperbilirubinemia & Liver Collapse:</strong> Total bilirubin is <strong>6.8 mg/dL</strong> (&gt; 4.0 ceiling) with ALT 310 U/L and AST 285 U/L. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong>.
-                </div>
-              )}
-              {selected.patient_id === "P043" && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Severe Agranulocytosis:</strong> ANC is <strong>320.0 /uL</strong> (&lt; 500 ceiling) with platelets 28,000 /uL. Triggers <strong>Guardrail-2 Critical Hematologic Short-Circuit</strong>.
-                </div>
-              )}
-              {selected.patient_id === "P036" && (
+              {selectedEval?.isRagRule && (
                 <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
-                  <strong className="text-amber-300">Protocol Rule Violation:</strong> Prescribed dose is <strong>40 mg BID</strong> (exceeds 5 mg limit) and patient suffered acute hemorrhage <strong>12 days ago</strong> (violates 30-day washout).
+                  <strong className="text-amber-300">Protocol Rule Violation:</strong>{" "}
+                  {selectedEval.bleedDays < 30
+                    ? `Acute hemorrhage documented ${selectedEval.bleedDays} days ago (violates protocol 30-day washout).`
+                    : selectedEval.doseExceeded
+                    ? `Prescribed dosage (${action}) exceeds trial protocol maximum approved ceiling.`
+                    : selectedEval.autoimmune
+                    ? "Active autoimmune disease on systemic immunosuppressants contraindicates protocol eligibility."
+                    : `Observed CrCl is ${selectedEval.crclVal} mL/min (< 30 mL/min protocol eligibility threshold).`}{" "}
+                  Triggers <strong>Protocol &amp; RAG Non-Compliance</strong> rejection.
                 </div>
               )}
-              {selected.patient_id === "P044" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
-                  <strong className="text-amber-300">Massive Overdose Violation:</strong> Prescribed action is <strong>60 mg BID</strong> (12-fold higher than approved 5 mg BID ceiling). Triggers RAG rule rejection.
-                </div>
-              )}
-              {selected.patient_id === "P045" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
-                  <strong className="text-amber-300">Acute Bleeding Washout Violation:</strong> Patient had acute lower GI hemorrhage <strong>8 days ago</strong> (protocol mandates at least 30 days washout). Triggers RAG rule rejection.
-                </div>
-              )}
-              {selected.patient_id === "P046" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
-                  <strong className="text-amber-300">Renal Protocol Floor Violation:</strong> Observed CrCl is <strong>22.0 mL/min</strong> (&lt; 30 mL/min eligibility threshold, though eGFR 24 passes G2). Triggers RAG rule rejection.
-                </div>
-              )}
-              {selected.patient_id === "P047" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
-                  <strong className="text-amber-300">Active Autoimmune Exclusion:</strong> Active Crohn&apos;s disease on systemic corticosteroids strictly contraindicates checkpoint immunotherapy per trial protocol.
-                </div>
-              )}
-              {selected.patient_id === "P037" && (
+              {selectedEval?.isA2A && (
                 <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
-                  <strong className="text-purple-300">Unanimous 4-Agent Rejection:</strong> Unapproved biologic escalation (400 mg Q3W), active Grade 3 colitis + Ketoconazole DDI, and <strong>$48,500</strong> uncovered patient liability.
+                  <strong className="text-purple-300">Multi-Agent Specialist Dissent:</strong>{" "}
+                  {selectedEval.hasDdi
+                    ? "Severe pharmacokinetic drug-drug interaction (CYP3A4/P-gp dual inhibition) identified by Safety Specialist."
+                    : "High out-of-pocket financial liability not covered under sponsor trial agreement identified by Financial Risk Specialist."}{" "}
+                  Triggers <strong>A2A Specialist Consensus Rejection</strong>.
                 </div>
               )}
-              {selected.patient_id === "P048" && (
-                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
-                  <strong className="text-purple-300">A2A Safety Agent Rejection:</strong> Severe pharmacokinetic drug-drug interaction. Concomitant Ketoconazole + Clarithromycin causes &gt;300% Apixaban AUC elevation and fatal hemorrhage hazard.
-                </div>
-              )}
-              {selected.patient_id === "P049" && (
-                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
-                  <strong className="text-purple-300">A2A Financial Agent Denial:</strong> Off-label exploratory sarcoma cohort is not covered by sponsor trial billing agreement. Incurs <strong>$52,800</strong> in non-covered patient liability.
-                </div>
-              )}
-              {selected.patient_id === "P050" && (
-                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
-                  <strong className="text-purple-300">Multi-Agent Dissent (Safety &amp; Financial):</strong> Quadruple antithrombotic therapy (Apixaban + Aspirin + Clopidogrel + Ticagrelor) causes severe hemorrhage risk and <strong>$6,400</strong> billing dispute.
-                </div>
-              )}
-              {(["P051", "P052", "P053", "P054"].includes(selected.patient_id) || /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(selected.patient_id)) && (
+              {selectedEval?.isClean && (
                 <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200 leading-relaxed space-y-1">
                   <strong className="text-emerald-300">✓ Fully Compliant Trial Candidate (Status: JUSTIFIED):</strong> All demographic attributes verified (G1), organ clearance corridors normal (G2), protocol dosing compliant (RAG), and specialist agents recommend approval with 100% sponsor trial coverage ($0 liability).
                 </div>
@@ -576,11 +591,11 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                 <Detail
                   label="Age / Biological Sex"
                   value={
-                    selected.patient_id === "P034"
+                    selectedEval?.isG1
                       ? "Unrecorded / Missing (21 CFR 312.62 Breach)"
                       : `${selected.age} yrs / ${selected.sex === "F" ? "Female" : selected.sex === "M" ? "Male" : selected.sex}`
                   }
-                  emphasis={selected.patient_id === "P034"}
+                  emphasis={Boolean(selectedEval?.isG1)}
                 />
                 <Detail label="Stratification Cohort" value={selected.cohort} />
                 <Detail label="Primary Pathology" value={selected.diagnosis} />

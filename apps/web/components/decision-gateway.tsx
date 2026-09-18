@@ -131,8 +131,7 @@ export function DecisionGateway({
   }, [patient, arbitrationResult?.prescribed_action])
 
   const pid = localPatient?.id || patient?.id || ""
-  const isP001toP032 = /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(pid)
-  const isCleanCohort = ["P051", "P052", "P053", "P054"].includes(pid) || isP001toP032
+
 
   const actionLower = (activeAction || "").toLowerCase()
   const hasDoseOverdose = (
@@ -210,6 +209,8 @@ export function DecisionGateway({
     const astVal = labs?.AST?.value ?? (typeof labs?.AST === "number" ? labs.AST : 24.0)
     const plateletsVal = labs?.platelets?.value ?? (typeof labs?.platelets === "number" ? labs.platelets : 220000)
     const inrVal = labs?.INR?.value ?? (typeof labs?.INR === "number" ? labs.INR : 1.1)
+    const biliVal = labs?.total_bilirubin?.value ?? (typeof labs?.total_bilirubin === "number" ? labs.total_bilirubin : 0.8)
+    const ancVal = labs?.ANC?.value ?? (typeof labs?.ANC === "number" ? labs.ANC : 3500)
 
     const bpSys = vitals?.blood_pressure_systolic ?? 124
     const bpDia = vitals?.blood_pressure_diastolic ?? 80
@@ -230,6 +231,8 @@ export function DecisionGateway({
       egfr: typeof egfrVal === "number" ? Math.round(egfrVal) : egfrVal,
       alt: typeof altVal === "number" ? Math.round(altVal) : altVal,
       ast: typeof astVal === "number" ? Math.round(astVal) : astVal,
+      bili: biliVal,
+      anc: ancVal,
       platelets: plateletsVal,
       inr: inrVal,
       bp: `${bpSys}/${bpDia} mmHg`,
@@ -292,69 +295,68 @@ export function DecisionGateway({
     }
     const alt = Number(clinicalProfile.alt)
     const ast = Number(clinicalProfile.ast)
-    const isBreached = ["P035", "P041", "P042", "P043"].includes(pid) || alt > 200 || ast > 200
+    const egfr = Number(clinicalProfile.egfr)
+    const bili = Number(clinicalProfile.bili ?? 0.8)
+    const anc = Number(clinicalProfile.anc ?? 3200)
+
     const breached = []
-    if (isBreached) {
-      if (pid === "P041") {
-        breached.push({
-          rule_id: "SAFETY_RENAL_EGFR",
-          parameter: "eGFR (End-Stage Renal Floor)",
-          observed: "11.0 mL/min/1.73m2",
-          limit: ">= 15.0 mL/min/1.73m2 (Catastrophic Stopping Floor)",
-          difference: "-4.0 mL/min/1.73m2 below ESRD threshold",
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: "Observed eGFR of 11.0 mL/min indicates end-stage renal collapse. Investigational drug clearance is prohibited.",
-        })
-      } else if (pid === "P042") {
-        breached.push({
-          rule_id: "SAFETY_HEPATIC_BILIRUBIN",
-          parameter: "Total Bilirubin",
-          observed: "6.8 mg/dL",
-          limit: "<= 4.0 mg/dL (Severe Hyperbilirubinemia)",
-          difference: "+2.8 mg/dL above critical threshold",
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: "Observed Total Bilirubin of 6.8 mg/dL indicates acute hepatic decompensation with jaundice.",
-        })
-        breached.push({
-          rule_id: "SAFETY_HEPATIC_ALT",
-          parameter: "ALT (Alanine Aminotransferase)",
-          observed: "310.0 U/L",
-          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
-          difference: "+110.0 U/L",
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: "Severe transaminase surge indicating acute hepatocellular injury.",
-        })
-      } else if (pid === "P043") {
-        breached.push({
-          rule_id: "SAFETY_HEME_ANC",
-          parameter: "ANC (Absolute Neutrophil Count)",
-          observed: "320 /uL",
-          limit: ">= 500 /uL (Agranulocytosis Ceiling)",
-          difference: "-180 /uL below critical safety floor",
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: "Observed ANC of 320 /uL represents life-threatening agranulocytosis. Systemic therapy is absolutely contraindicated.",
-        })
-      } else {
-        breached.push({
-          rule_id: "SAFETY_HEPATIC_ALT",
-          parameter: "ALT (Alanine Aminotransferase)",
-          observed: `${alt || 620.0} U/L`,
-          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
-          difference: `+${(alt || 620.0) - 200.0} U/L`,
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: `Observed ALT of ${alt || 620.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN). Acute hepatic necrosis.`,
-        })
-        breached.push({
-          rule_id: "SAFETY_HEPATIC_AST",
-          parameter: "AST (Aspartate Aminotransferase)",
-          observed: `${ast || 480.0} U/L`,
-          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
-          difference: `+${(ast || 480.0) - 200.0} U/L`,
-          severity: "CATASTROPHIC_HARD_BREACH",
-          reason: `Observed AST of ${ast || 480.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN).`,
-        })
-      }
+    if (alt > 200) {
+      breached.push({
+        rule_id: "SAFETY_HEPATIC_ALT",
+        parameter: "ALT (Alanine Aminotransferase)",
+        observed: `${alt.toFixed(1)} U/L`,
+        limit: "<= 200.0 U/L (Catastrophic Ceiling)",
+        difference: `+${(alt - 200).toFixed(1)} U/L`,
+        severity: "CATASTROPHIC_HARD_BREACH",
+        reason: `Observed ALT of ${alt.toFixed(1)} U/L exceeds critical safety ceiling (>5x ULN). Acute hepatic necrosis.`,
+      })
     }
+    if (ast > 200) {
+      breached.push({
+        rule_id: "SAFETY_HEPATIC_AST",
+        parameter: "AST (Aspartate Aminotransferase)",
+        observed: `${ast.toFixed(1)} U/L`,
+        limit: "<= 200.0 U/L (Catastrophic Ceiling)",
+        difference: `+${(ast - 200).toFixed(1)} U/L`,
+        severity: "CATASTROPHIC_HARD_BREACH",
+        reason: `Observed AST of ${ast.toFixed(1)} U/L exceeds critical safety ceiling (>5x ULN).`,
+      })
+    }
+    if (egfr < 15) {
+      breached.push({
+        rule_id: "SAFETY_RENAL_EGFR",
+        parameter: "eGFR (End-Stage Renal Floor)",
+        observed: `${egfr.toFixed(1)} mL/min/1.73m2`,
+        limit: ">= 15.0 mL/min/1.73m2 (Catastrophic Stopping Floor)",
+        difference: `${(egfr - 15).toFixed(1)} mL/min/1.73m2 below ESRD threshold`,
+        severity: "CATASTROPHIC_HARD_BREACH",
+        reason: `Observed eGFR of ${egfr.toFixed(1)} mL/min indicates end-stage renal collapse. Investigational drug clearance is prohibited.`,
+      })
+    }
+    if (bili > 4.0) {
+      breached.push({
+        rule_id: "SAFETY_HEPATIC_BILIRUBIN",
+        parameter: "Total Bilirubin",
+        observed: `${bili.toFixed(1)} mg/dL`,
+        limit: "<= 4.0 mg/dL (Severe Hyperbilirubinemia)",
+        difference: `+${(bili - 4.0).toFixed(1)} mg/dL above critical threshold`,
+        severity: "CATASTROPHIC_HARD_BREACH",
+        reason: `Observed Total Bilirubin of ${bili.toFixed(1)} mg/dL indicates acute hepatic decompensation with jaundice.`,
+      })
+    }
+    if (anc < 500) {
+      breached.push({
+        rule_id: "SAFETY_HEME_ANC",
+        parameter: "ANC (Absolute Neutrophil Count)",
+        observed: `${anc} /uL`,
+        limit: ">= 500 /uL (Agranulocytosis Ceiling)",
+        difference: `${anc - 500} /uL below critical safety floor`,
+        severity: "CATASTROPHIC_HARD_BREACH",
+        reason: `Observed ANC of ${anc} /uL represents life-threatening agranulocytosis. Systemic therapy is absolutely contraindicated.`,
+      })
+    }
+
+    const isBreached = breached.length > 0
     return {
       passed: !isBreached,
       status: isBreached ? ("BREACHED" as const) : ("PASSED" as const),
@@ -368,10 +370,14 @@ export function DecisionGateway({
         ? "Immediate halt of study drug administration and emergency clinical toxicity escalation."
         : "Proceed to trial status check and multi-agent fan-out.",
     }
-  }, [arbitrationResult.guardrail_2_result, pid, clinicalProfile])
+  }, [arbitrationResult.guardrail_2_result, clinicalProfile])
 
   // Section 3: RAG Protocol Rules & Dosage Window (Dynamic Overdose & Titration Evaluation)
   const ragRules = useMemo(() => {
+    if (!orderModified && arbitrationResult.rag_rule_result) {
+      return arbitrationResult.rag_rule_result
+    }
+
     const violations: any[] = []
 
     if (hasDoseOverdose) {
@@ -386,45 +392,44 @@ export function DecisionGateway({
       })
     }
 
-    if (pid === "P045" && !orderModified) {
+    const facts = (localPatient?.clinical_data || patient?.clinical_data)?.protocol_facts || {}
+    const daysSinceBleed = facts?.days_since_major_bleed
+    if (facts?.ongoing_bleeding || (typeof daysSinceBleed === "number" && daysSinceBleed < 30)) {
+      const days = daysSinceBleed ?? 12
       violations.push({
         rule_id: `${activeTrialId}_EXC_BLEEDING_WASHOUT`,
         parameter: "Major Hemorrhage Washout",
-        observed: "8 days elapsed since acute lower GI hemorrhage",
+        observed: `${days} days elapsed since major bleed`,
         limit: ">= 30 days mandatory washout",
-        difference: "-22 days below required washout period",
+        difference: `-${30 - days} days below required washout period`,
         reference: `${activeTrialId}-eligibility-003: Hemorrhagic Exclusion Criteria`,
-        reason: "Patient experienced active major hemorrhage 8 days ago; protocol mandates at least 30 days washout.",
+        reason: `Patient experienced severe active/recent bleeding ${days} days ago; protocol mandates at least 30 days washout.`,
       })
-    } else if (pid === "P046" && !orderModified) {
+    }
+
+    const labs = (localPatient?.clinical_data || patient?.clinical_data)?.lab_results || {}
+    const crclNum = Number(labs?.creatinine_clearance?.value ?? labs?.creatinine_clearance ?? 65)
+    if (crclNum < 30) {
       violations.push({
         rule_id: `${activeTrialId}_EXC_SEVERE_RENAL`,
         parameter: "Creatinine Clearance Protocol Floor",
-        observed: "CrCl 22.0 mL/min",
+        observed: `CrCl ${crclNum.toFixed(1)} mL/min`,
         limit: ">= 30.0 mL/min protocol entry floor",
-        difference: "-8.0 mL/min below required entry floor",
+        difference: `${(crclNum - 30).toFixed(1)} mL/min below required entry floor`,
         reference: `${activeTrialId}-eligibility-006: Renal Stratification Protocol`,
-        reason: "Observed creatinine clearance (22 mL/min) falls below the protocol-specified 30 mL/min participation floor.",
+        reason: `Observed creatinine clearance (${crclNum.toFixed(0)} mL/min) falls below the protocol-specified 30 mL/min participation floor.`,
       })
-    } else if (pid === "P047" && !orderModified) {
+    }
+
+    if (facts?.active_autoimmune_disease) {
       violations.push({
         rule_id: `${activeTrialId}_EXC_AUTOIMMUNE`,
         parameter: "Active Autoimmune Exclusion",
-        observed: "Active Crohn's colitis on systemic Prednisone 30mg daily",
+        observed: "Active autoimmune colitis on systemic immunosuppression",
         limit: "No active autoimmune disease requiring systemic immunosuppression",
         difference: "Active contraindicated condition",
         reference: `${activeTrialId}-eligibility-002: Checkpoint Exclusion Criteria`,
         reason: "Active autoimmune disorder requiring systemic immunosuppressive therapy strictly contraindicates checkpoint immunotherapy.",
-      })
-    } else if (pid === "P036" && !orderModified && hasDoseOverdose) {
-      violations.push({
-        rule_id: `${activeTrialId}_EXC_BLEEDING_WASHOUT`,
-        parameter: "Major Hemorrhage Washout",
-        observed: "12 days elapsed since major GI bleed",
-        limit: ">= 30 days mandatory washout",
-        difference: "-18 days below required washout period",
-        reference: `${activeTrialId}-eligibility-003: Hemorrhagic Exclusion Criteria`,
-        reason: "Patient experienced severe active/recent bleeding 12 days ago; protocol mandates at least 30 days washout.",
       })
     }
 
@@ -436,93 +441,77 @@ export function DecisionGateway({
         ? "Proposed intervention and patient clinical parameters conform to all trial protocol and RAG rule specifications."
         : `${violations.length} trial protocol eligibility and dosing rule violation(s) identified against ${activeTrialId}.`,
     }
-  }, [pid, activeTrialId, hasDoseOverdose, activeAction, orderModified])
+  }, [orderModified, arbitrationResult.rag_rule_result, hasDoseOverdose, activeAction, activeTrialId, localPatient, patient])
 
-  // Section 4: 4 A2A Multi-Agent Consensus Matrix & Specialist Discrepancies
+  const complianceResult = arbitrationResult.protocol_compliance_result
+  const safetyResult = arbitrationResult.safety_result
+  const financialResult = arbitrationResult.financial_result
+
+  // Specialist Status Vectors: Prioritize evaluated arbitration results, updating dynamically if modified
+  const rawCompStatus = complianceResult?.compliance_status || (ragRules.compliant && !hasDoseOverdose ? "COMPLIANT" : "NON_COMPLIANT")
+  const isCompliant = orderModified ? (ragRules.compliant && !hasDoseOverdose) : (rawCompStatus === "COMPLIANT")
+  const complianceStatus = isCompliant ? "COMPLIANT" : (orderModified ? (hasDoseOverdose ? "NON_COMPLIANT" : "COMPLIANT") : rawCompStatus)
+
+  const rawSafetyStatus = safetyResult?.safety_status || (guardrail2.passed && !hasDoseOverdose ? "SAFE" : "UNSAFE")
+  const isSafetySafe = orderModified ? (guardrail2.passed && !hasDoseOverdose) : (rawSafetyStatus === "SAFE")
+  const safetyStatus = isSafetySafe ? "SAFE" : (orderModified ? (hasDoseOverdose || !guardrail2.passed ? "UNSAFE" : "SAFE") : rawSafetyStatus)
+
+  const rawCoverageStatus = financialResult?.coverage_status || (!hasDoseOverdose ? "COVERED" : "NOT_COVERED")
+  const isCovered = orderModified ? !hasDoseOverdose : (rawCoverageStatus === "COVERED")
+  const coverageStatus = isCovered ? "COVERED" : (orderModified ? (hasDoseOverdose ? "NOT_COVERED" : "COVERED") : rawCoverageStatus)
+
+  const financialExposure = orderModified
+    ? (hasDoseOverdose ? 12500 : 0)
+    : (typeof financialResult?.financialExposure === "number"
+        ? financialResult.financialExposure
+        : (typeof arbitrationResult.financialExposure === "number"
+            ? arbitrationResult.financialExposure
+            : (isCovered ? 0 : 12500)))
+
+  // Section 4: 4 A2A Multi-Agent Consensus Matrix & Specialist Discrepancies (Specialists Only)
   const a2aDiscrepancies = useMemo(() => {
-    const isClean = isCleanCohort && !hasDoseOverdose
-
-    if (isClean && guardrail1.passed && guardrail2.passed && ragRules.compliant) {
-      return {
-        has_discrepancy: false,
-        consensus_status: "UNANIMOUS_CONSENSUS_JUSTIFIED" as const,
-        dissenting_agents: [],
-        reasons: {},
-      }
-    }
-
-    const isP037 = pid === "P037" && !orderModified
-    const isP048 = pid === "P048"
-    const isP049 = pid === "P049"
-    const isP050 = pid === "P050"
-    const hasDiscrepancy = isP037 || isP048 || isP049 || isP050 || hasDoseOverdose || !guardrail1.passed || !guardrail2.passed || !ragRules.compliant
     const dissenting: string[] = []
     const reasons: Record<string, string> = {}
 
-    if (hasDoseOverdose || isP037) {
-      dissenting.push("Protocol Compliance Agent")
-      reasons["Protocol Compliance Agent"] = hasDoseOverdose
-        ? `Prescribed dosage (${activeAction}) exceeds protocol maximum ceiling.`
-        : "Prescribed dose of 400 mg Q3W represents an unapproved 100% dose escalation exceeding trial protocol specifications."
+    if (complianceStatus !== "COMPLIANT") {
+      dissenting.push("Protocol Compliance Specialist")
+      reasons["Protocol Compliance Specialist"] =
+        complianceResult?.explanation ||
+        (hasDoseOverdose
+          ? `Prescribed dosage (${activeAction}) exceeds protocol maximum ceiling.`
+          : "Protocol compliance verification exception.")
     }
-    if (hasDoseOverdose || isP037 || isP048 || isP050) {
-      dissenting.push("Safety & Toxicity Agent")
-      if (hasDoseOverdose) {
-        reasons["Safety & Toxicity Agent"] = "Supratherapeutic drug exposure increases risk of life-threatening organ toxicity and hemorrhage."
-      } else if (isP048) {
-        reasons["Safety & Toxicity Agent"] = "Fatal pharmacokinetic drug interaction: Concomitant Ketoconazole and Clarithromycin severely inhibit Apixaban elimination (>300% AUC surge)."
-      } else if (isP050) {
-        reasons["Safety & Toxicity Agent"] = "Quadruple antithrombotic regimen (Apixaban + Aspirin + Clopidogrel + Ticagrelor) creates severe prohibited bleeding hazard."
-      } else if (isP037) {
-        reasons["Safety & Toxicity Agent"] = "Severe clinical safety hazard: Active Grade 3 immune-related colitis, myelosuppression, and CYP3A4 interaction."
-      }
+    if (safetyStatus !== "SAFE") {
+      dissenting.push("Safety & Toxicity Specialist")
+      reasons["Safety & Toxicity Specialist"] =
+        safetyResult?.explanation ||
+        (hasDoseOverdose
+          ? "Supratherapeutic drug exposure increases risk of life-threatening organ toxicity and hemorrhage."
+          : "Clinical safety or drug interaction contraindication.")
     }
-    if (hasDoseOverdose || isP037 || isP049 || isP050) {
-      dissenting.push("Financial Risk Agent")
-      if (hasDoseOverdose) {
-        reasons["Financial Risk Agent"] = "Non-protocol supratherapeutic dosing requires secondary prior authorization ($12,500 liability)."
-      } else if (isP049) {
-        reasons["Financial Risk Agent"] = "Sponsor CTA coverage denied for exploratory off-label sarcoma indication. Estimated patient out-of-pocket liability: $52,800."
-      } else if (isP050) {
-        reasons["Financial Risk Agent"] = "Non-protocol quadruple combination requires secondary prior authorization ($6,400 liability)."
-      } else if (isP037) {
-        reasons["Financial Risk Agent"] = "Specialty Biologics Clinical Trial Grant denies coverage for unapproved dose escalations. Estimated patient liability: $48,500."
-      }
-    }
-    if (!guardrail1.passed) {
-      dissenting.push("Guardrail-1 Ingress Validator")
-      reasons["Guardrail-1 Ingress Validator"] = guardrail1.reason
-    }
-    if (!guardrail2.passed) {
-      dissenting.push("Guardrail-2 Boundary Gate")
-      reasons["Guardrail-2 Boundary Gate"] = guardrail2.reason
+    if (coverageStatus !== "COVERED") {
+      dissenting.push("Financial Risk Specialist")
+      reasons["Financial Risk Specialist"] =
+        financialResult?.callout ||
+        financialResult?.explanation ||
+        (hasDoseOverdose
+          ? "Non-protocol supratherapeutic dosing requires secondary prior authorization ($12,500 liability)."
+          : "Sponsor reimbursement exception.")
     }
 
+    const hasDiscrepancy = dissenting.length > 0 || !guardrail1.passed || !guardrail2.passed || !ragRules.compliant
     return {
       has_discrepancy: hasDiscrepancy,
       consensus_status: hasDiscrepancy ? ("CONSENSUS_REJECTED" as const) : ("UNANIMOUS_CONSENSUS_JUSTIFIED" as const),
       dissenting_agents: dissenting,
       reasons,
     }
-  }, [pid, isCleanCohort, hasDoseOverdose, guardrail1, guardrail2, ragRules, activeAction, orderModified])
-
-  const complianceResult = arbitrationResult.protocol_compliance_result
-  const safetyResult = arbitrationResult.safety_result
-  const financialResult = arbitrationResult.financial_result
-
-  // Specialist Status Vectors
-  const isCompliant = ragRules.compliant && !hasDoseOverdose
-  const complianceStatus = isCompliant ? "COMPLIANT" : "NON_COMPLIANT"
-  const isSafetySafe = guardrail2.passed && !hasDoseOverdose && !["P037", "P048", "P050"].includes(pid)
-  const safetyStatus = isSafetySafe ? "SAFE" : "UNSAFE"
-  const isCovered = !hasDoseOverdose && !["P037", "P049", "P050"].includes(pid)
-  const coverageStatus = isCovered ? "COVERED" : "NOT_COVERED"
-  const financialExposure = isCovered ? 0 : (pid === "P049" ? 52800 : pid === "P037" ? 48500 : pid === "P050" ? 6400 : 12500)
+  }, [complianceStatus, safetyStatus, coverageStatus, complianceResult, safetyResult, financialResult, guardrail1.passed, guardrail2.passed, ragRules.compliant, hasDoseOverdose, activeAction])
 
   // Dynamic Final Verdict Synthesis
-  let finalVerdict: string = "JUSTIFIED"
-  let recommendationTitle: string = "Consensus Verdict: JUSTIFIED"
-  let recommendationSummary: string = "Unanimous multi-agent consensus achieved. Protocol Compliance, Safety & Toxicity, and Financial Risk specialists all recommend proceeding. 100% sponsor trial coverage ($0 liability)."
+  let finalVerdict: string = arbitrationResult.final_verdict || "JUSTIFIED"
+  let recommendationTitle: string = arbitrationResult.recommendationTitle || "Consensus Verdict: JUSTIFIED"
+  let recommendationSummary: string = arbitrationResult.summary || "Unanimous multi-agent consensus achieved. Protocol Compliance, Safety & Toxicity, and Financial Risk specialists all recommend proceeding. 100% sponsor trial coverage ($0 liability)."
 
   if (decision === "reject") {
     finalVerdict = "NOT_JUSTIFIED (PHYSICIAN REJECTED)"
@@ -554,10 +543,14 @@ export function DecisionGateway({
     finalVerdict = "NOT_JUSTIFIED"
     recommendationTitle = "Consensus Verdict: NOT_JUSTIFIED (Protocol Violation)"
     recommendationSummary = ragRules.violations[0]?.reason || "Prescribed medication order violates protocol dosing limits."
-  } else if (a2aDiscrepancies.has_discrepancy) {
+  } else if (a2aDiscrepancies.dissenting_agents.length > 0) {
     finalVerdict = "NOT_JUSTIFIED"
     recommendationTitle = "Consensus Verdict: NOT_JUSTIFIED (Multi-Agent Dissent)"
     recommendationSummary = `Consensus rejected: ${a2aDiscrepancies.dissenting_agents.join(", ")} flagged critical clinical, safety, or financial exceptions.`
+  } else if (arbitrationResult.final_verdict) {
+    finalVerdict = arbitrationResult.final_verdict
+    recommendationTitle = arbitrationResult.recommendationTitle || `Consensus Verdict: ${arbitrationResult.final_verdict}`
+    recommendationSummary = arbitrationResult.summary || recommendationSummary
   } else {
     finalVerdict = "JUSTIFIED"
     recommendationTitle = "Consensus Verdict: JUSTIFIED"

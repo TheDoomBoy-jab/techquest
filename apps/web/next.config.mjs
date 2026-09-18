@@ -8,6 +8,16 @@ const nextConfig = {
     '*': ['.env*', '**/.env*'],
   },
   async rewrites() {
+    const hasExternalGateway = Boolean(
+      process.env.GATEWAY_URL || process.env.NEXT_PUBLIC_GATEWAY_URL
+    )
+
+    // On Vercel deployments without an external backend, allow Next.js route handlers
+    // to natively handle SSE orchestration and HITL packages without 502 localhost errors
+    if (process.env.VERCEL && !hasExternalGateway) {
+      return []
+    }
+
     const gateway = (
       process.env.GATEWAY_URL ||
       process.env.NEXT_PUBLIC_GATEWAY_URL ||

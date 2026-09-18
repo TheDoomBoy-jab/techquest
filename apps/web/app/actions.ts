@@ -153,29 +153,34 @@ export type ArbitrationResult = {
 
 export async function getArbitrationResult(patientId: string): Promise<ArbitrationResult> {
   const baseUrl = getGatewayUrl()
+  const isVercelWithoutGateway = Boolean(
+    process.env.VERCEL && !process.env.GATEWAY_URL && !process.env.NEXT_PUBLIC_GATEWAY_URL
+  )
 
-  // Attempt to fetch from gateway API with retry (allowing backend pipeline execution to finalize)
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 4000)
-      const response = await fetch(
-        `${baseUrl}/api/hitl/package/${encodeURIComponent(patientId)}`,
-        { cache: "no-store", signal: controller.signal }
-      )
-      clearTimeout(timeoutId)
+  // Attempt to fetch from gateway API with retry if running locally or with an explicit external gateway configured
+  if (!isVercelWithoutGateway && baseUrl) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3500)
+        const response = await fetch(
+          `${baseUrl}/api/hitl/package/${encodeURIComponent(patientId)}`,
+          { cache: "no-store", signal: controller.signal }
+        )
+        clearTimeout(timeoutId)
 
-      if (response.ok) {
-        const pkg = await response.json()
-        if (pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
-          return pkg
+        if (response.ok) {
+          const pkg = await response.json()
+          if (pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
+            return pkg
+          }
         }
+      } catch (err) {
+        // transient connection error; retry if remaining
       }
-    } catch (err) {
-      // transient connection error; retry if remaining
-    }
-    if (attempt < 5) {
-      await new Promise((resolve) => setTimeout(resolve, 600))
+      if (attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
     }
   }
 
