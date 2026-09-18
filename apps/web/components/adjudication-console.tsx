@@ -7,6 +7,7 @@ import { DecisionGateway } from "@/components/decision-gateway"
 import { ExecutionStream } from "@/components/execution-stream"
 import { OrchestrationGraph } from "@/components/orchestration-graph"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
+import { getGatewayUrl } from "@/lib/api-config"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
 
@@ -38,7 +39,8 @@ export function AdjudicationConsole({
     setRunStarted(false)
     setArbitrationResult(null)
 
-    fetch("http://localhost:8000/api/orchestrator/runs", {
+    const baseUrl = getGatewayUrl()
+    fetch(`${baseUrl}/api/orchestrator/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

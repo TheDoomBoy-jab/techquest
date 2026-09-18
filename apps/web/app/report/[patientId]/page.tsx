@@ -1,4 +1,5 @@
 import { TrialGuardLogo } from "@/components/trialguard-logo"
+import { getGatewayUrl } from "@/lib/api-config"
 
 type Report = {
     report_id?: string
@@ -24,9 +25,25 @@ type Report = {
 
 export default async function ReportPage({ params }: { params: Promise<{ patientId: string }> }) {
     const { patientId } = await params
-    const response = await fetch(`http://localhost:8000/api/reports/${encodeURIComponent(patientId)}`, { cache: "no-store" })
-    const payload = response.ok ? await response.json() : { reports: [] }
-    const report = (payload.reports ?? []).at(-1) as Report | undefined
+    const baseUrl = getGatewayUrl()
+    let report: Report | undefined = undefined
+
+    try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 3500)
+        const response = await fetch(`${baseUrl}/api/reports/${encodeURIComponent(patientId)}`, {
+            cache: "no-store",
+            signal: controller.signal,
+        }).catch(() => null)
+        clearTimeout(timeoutId)
+
+        if (response && response.ok) {
+            const payload = await response.json()
+            report = (payload.reports ?? []).at(-1) as Report | undefined
+        }
+    } catch (err) {
+        console.warn(`Report fetch failed at ${baseUrl}:`, err)
+    }
 
     return (
         <main className="min-h-screen bg-[#121212] px-4 py-8 text-white md:px-8">
@@ -49,7 +66,7 @@ export default async function ReportPage({ params }: { params: Promise<{ patient
                         <div className="flex flex-wrap items-center gap-3">
                             <StatusBadge value={report?.final_verdict ?? "REPORT_UNAVAILABLE"} />
                             <a
-                                href={`http://localhost:8000/api/reports/${encodeURIComponent(patientId)}/pdf`}
+                                href={`/api/reports/${encodeURIComponent(patientId)}/pdf`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-lg shadow-emerald-950/40 transition-all"

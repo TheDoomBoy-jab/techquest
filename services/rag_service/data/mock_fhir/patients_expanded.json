@@ -1714,6 +1714,93 @@
         }
       },
       "fhir_id": "synthetic-P054"
+    },
+    {
+      "patient_id": "P013",
+      "assigned_demo_trial_id": "NCT00699998",
+      "cohort": "Cohort B - Renal Stratification",
+      "demo_category": "SYNTHETIC_EHR",
+      "fhir_id": "synthetic-P013",
+      "name": "Kavita Deshmukh",
+      "patient": {
+        "patient_id": "P013",
+        "name": "Kavita Deshmukh",
+        "cohort": "Cohort B - Renal Stratification",
+        "age": 64,
+        "sex": "female",
+        "birth_date": "1961-07-22",
+        "dob": "1961-07-22",
+        "weight": 66.0,
+        "diagnoses": [
+          "diabetic nephropathy stage 3a",
+          "essential hypertension"
+        ],
+        "medications": [
+          "empagliflozin 10mg daily",
+          "losartan 50mg daily"
+        ],
+        "allergies": [],
+        "lab_results": {
+          "ALT": {
+            "value": 24.0,
+            "unit": "U/L"
+          },
+          "AST": {
+            "value": 22.0,
+            "unit": "U/L"
+          },
+          "eGFR": {
+            "value": 52.0,
+            "unit": "mL/min/1.73m2"
+          },
+          "total_bilirubin": {
+            "value": 0.7,
+            "unit": "mg/dL"
+          },
+          "ANC": {
+            "value": 4100.0,
+            "unit": "/uL"
+          },
+          "platelets": {
+            "value": 230000.0,
+            "unit": "/uL"
+          },
+          "hemoglobin": {
+            "value": 13.5,
+            "unit": "g/dL"
+          },
+          "INR": {
+            "value": 1.0,
+            "unit": "ratio"
+          },
+          "serum_creatinine": {
+            "value": 1.3,
+            "unit": "mg/dL"
+          },
+          "creatinine_clearance": {
+            "value": 58.0,
+            "unit": "mL/min"
+          }
+        },
+        "vital_signs": {
+          "heart_rate": 70.0,
+          "blood_pressure_systolic": 122,
+          "blood_pressure_diastolic": 78
+        },
+        "cardiac_function": {
+          "LVEF": 58.0,
+          "QTc": 410.0
+        },
+        "protocol_facts": {
+          "oral_anticoagulation_required": false,
+          "pregnant": false,
+          "breastfeeding": false,
+          "woman_of_childbearing_potential": false,
+          "history_of_intracranial_hemorrhage": false,
+          "ongoing_bleeding": false,
+          "known_coagulopathy": false
+        }
+      }
     }
   ]
 }

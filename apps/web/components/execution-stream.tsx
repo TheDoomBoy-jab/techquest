@@ -2,6 +2,7 @@
 import { CheckCircle2, Clock3, Info, Loader2 } from "lucide-react"
 import { AGENTS, type AgentCard } from "@/lib/clinical-data"
 import { useEffect, useState } from "react"
+import { getGatewayUrl } from "@/lib/api-config"
 
 type Props = {
   patientId: string
@@ -25,7 +26,9 @@ export function ExecutionStream({ patientId }: Props) {
     setAgents(AGENTS.map(({ name }) => ({ name })))
     setConnectionState("connecting")
 
-    const eventSource = new EventSource(`http://localhost:8000/api/orchestrator/stream?patientId=${patientId}`)
+    const baseUrl = getGatewayUrl()
+    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}`
+    const eventSource = new EventSource(streamUrl)
     eventSource.onopen = () => setConnectionState("open")
     eventSource.onmessage = (event) => {
       try {
@@ -34,7 +37,10 @@ export function ExecutionStream({ patientId }: Props) {
         if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") eventSource.close()
       } catch (error) { console.error("Failed to parse SSE data:", error) }
     }
-    eventSource.onerror = () => setConnectionState("error")
+    eventSource.onerror = () => {
+      setConnectionState("error")
+      try { eventSource.close() } catch {}
+    }
 
     return () => {
       eventSource.close()

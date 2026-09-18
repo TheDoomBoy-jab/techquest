@@ -1,199 +1,196 @@
-"""Unified A2A Gateway for TrialGuard Agents and Coordinator Tasks.
-
-Coordinates and routes to:
-  - Compliance Specialist (Port 8001)
-  - Safety Specialist (Port 8002)
-  - Financial Specialist (Port 8003)
-  - Review Summary Synthesis (LLM)
-"""
-
-from __future__ import annotations
-
-import asyncio
-import json
-import os
-import uvicorn
-from starlette.applications import Starlette
-import httpx
-
-from a2a.helpers import get_message_text, new_task_from_user_message, new_text_message, new_text_part
-from a2a.server.agent_execution import AgentExecutor, RequestContext
-from a2a.server.events import EventQueue
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
-from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
-from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
-from a2a.types.a2a_pb2 import TaskState
-
-# Upstream direct evaluators / fallbacks mapped to actual directory structure
-try:
-    from apps.agent_compliance.server import _evaluate as evaluate_compliance
-except ImportError:
-    evaluate_compliance = None
-
-try:
-    from apps.agent_safety.server import _evaluate_safety as evaluate_safety
-except ImportError:
-    evaluate_safety = None
-
-try:
-    import llm_client as llm_client
-except ImportError:
-    llm_client = None
-
-# Master Gateway Port
-HOST = os.getenv("A2A_HOST", "0.0.0.0")
-PORT = int(os.getenv("A2A_PORT", "8000"))
-A2A_URL = os.getenv("A2A_URL", f"http://{HOST}:{PORT}")
-
-# Client endpoints must route to 127.0.0.1
-COMPLIANCE_ENDPOINT = os.getenv("COMPLIANCE_AGENT_URL", "http://127.0.0.1:8001/rpc")
-SAFETY_ENDPOINT = os.getenv("SAFETY_AGENT_URL", "http://127.0.0.1:8002/rpc")
-FINANCIAL_ENDPOINT = os.getenv("FINANCIAL_AGENT_URL", "http://127.0.0.1:8003/rpc")
+TRIALGUARD — MASTER A2A SERVER & COMPLIANCE AGENT — INTERFACE CONTRACT
+========================================================================
+(Governs Agent-to-Agent communication between the Orchestrator Client Nodes:
+apps/orchestrator/nodes/compliance_client.py, universal_a2a_client.py,
+and the Unified A2A Master Daemon in apps/agent-master/a2a_server.py.)
 
 
-async def _forward_rpc(url: str, payload: dict) -> dict | None:
-    """Forward A2A JSON-RPC to the specialized microservice."""
-    body = {
-        "jsonrpc": "2.0",
-        "id": "gateway-fwd",
-        "method": "SendMessage",
-        "params": {
-            "message": {
-                "role": "ROLE_USER",
-                "parts": [{"text": json.dumps(payload), "media_type": "application/json"}],
-            }
-        },
+1. SERVICE LOCATION & DAEMON CONNECTIVITY
+------------------------------------------
+Base URL:          http://127.0.0.1:8001/     (Configurable via A2A_PORT / A2A_HOST / A2A_URL)
+Service Entry:     apps/agent-master/a2a_server.py
+Supported RPC URIs: POST http://127.0.0.1:8001/ and POST http://127.0.0.1:8001/rpc
+Protocol:          A2A (Agent-to-Agent), JSON-RPC 2.0 over HTTP
+Primary Method:    "SendMessage" (A2A Task Specification)
+Direct Methods:    "evaluate_compliance", "evaluate_safety", "evaluate_financial"
+Agent Discovery:   GET http://127.0.0.1:8001/.well-known/agent-card.json
+De-registration:   apps/agent-compliance/a2a_server.py is DEPRECATED and REMOVED.
+
+
+2. REQUEST ENVELOPE (JSON-RPC 2.0)
+------------------------------------
+POST to http://127.0.0.1:8001/ with the standard A2A envelope:
+
+{
+  "jsonrpc": "2.0",
+  "id": "<uuid4>",
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "messageId": "<uuid4>",
+      "role": "ROLE_USER",
+      "parts": [
+        { "text": "<JSON-STRINGIFIED payload containing agent_type — see Section 3>" }
+      ]
     }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json=body)
-            if resp.status_code == 200:
-                data = resp.json()
-                artifacts = data.get("result", {}).get("task", {}).get("artifacts", [])
-                if artifacts:
-                    return json.loads(artifacts[0]["parts"][0]["text"])
-                return data.get("result")
-    except Exception:
-        return None
-    return None
+  }
+}
+
+Headers Required:
+  Content-Type: application/json
+  A2A-Version: 1.0
 
 
-async def _route(payload: dict) -> dict | str:
-    task = payload.get("agent-task") or payload.get("agent_type")
+3. COMPLIANCE INPUT PAYLOAD (Inside parts[0].text)
+---------------------------------------------------
+The stringified JSON payload passed inside parts[0].text must include "agent_type": "compliance":
 
-    # 1. Summary Synthesis
-    if task == "summary-synthesis":
-        if llm_client:
-            raw = llm_client.call_llm(
-                "Write a short summary for a doctor using these clinical review results. "
-                "State whether agents agree, mention key violations or safety concerns, "
-                "and state what needs human attention. Use 2-4 concise sentences.\n\n"
-                + json.dumps(payload, indent=2),
-                max_tokens=400,
-            )
-            return raw.strip()
-        return "Consensus synthesis: Multi-agent evaluation completed."
-
-    # 2. Compliance Routing
-    if task == "compliance":
-        forbidden = {"patient_id", "patient", "patient_data"} & payload.keys()
-        if forbidden:
-            raise ValueError(f"Compliance payload cannot contain: {sorted(forbidden)}")
-        remote = await _forward_rpc(COMPLIANCE_ENDPOINT, payload)
-        if remote:
-            return remote
-        if evaluate_compliance:
-            return evaluate_compliance(
-                trial_id=payload["trial_id"],
-                recent_action=payload["recent_action"],
-                protocol_chunks=payload.get("relevant_protocols", []),
-                report_history=payload.get("report_history", []),
-                modification=payload.get("modification", ""),
-            )
-        raise RuntimeError("Compliance microservice offline and local fallback unavailable.")
-
-    # 3. Safety Routing
-    if task == "safety":
-        if "relevant_protocols" in payload:
-            raise ValueError("Safety payload cannot contain relevant_protocols")
-        remote = await _forward_rpc(SAFETY_ENDPOINT, payload)
-        if remote:
-            return remote
-        if evaluate_safety:
-            return evaluate_safety(
-                trial_id=payload["trial_id"],
-                patient_id=payload["patient_id"],
-                recent_action=payload["recent_action"],
-                patient_data=payload["patient_data"],
-                report_history=payload.get("report_history", []),
-                modification=payload.get("modification", ""),
-            )
-        raise RuntimeError("Safety microservice offline and local fallback unavailable.")
-
-    # 4. Financial Routing
-    if task == "financial":
-        remote = await _forward_rpc(FINANCIAL_ENDPOINT, payload)
-        if remote:
-            return remote
-        return {
-            "coverage_status": "COVERED",
-            "tier": "Tier-1 Investigational Coverage",
-            "explanation": "Default gateway fallback grant allocation.",
+{
+  "agent_type": "compliance",
+  "trial_id": "string",
+  "iteration": integer,
+  "recent_action": {
+    "drug": "string",
+    "dosage": "string",
+    "frequency": "string",
+    "route": "string",
+    "raw_text": "string"
+  },
+  "relevant_protocols": [
+    {
+      "chunk_id": "string",
+      "rule_id": "string",
+      "text": "string",
+      "section": "string",
+      "score": number
+    }
+  ],
+  "report_history": [
+    {
+      "iteration": integer,
+      "compliance_status": "COMPLIANT" | "NON_COMPLIANT" | "UNKNOWN",
+      "violations": [
+        {
+          "parameter": "string",
+          "observed": "string",
+          "expected": {
+            "operator": "string",
+            "value": "string" | number,
+            "unit": "string"
+          },
+          "protocol_text": "string",
+          "reason": "string"
         }
+      ],
+      "explanation": "string"
+    }
+  ]
+}
 
-    raise ValueError(f"agent-task must be one of: compliance, safety, financial, summary-synthesis; got '{task}'")
-
-
-class TrialGuardExecutor(AgentExecutor):
-    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        task = context.current_task or new_task_from_user_message(context.message)
-        if not context.current_task:
-            await event_queue.enqueue_event(task)
-        updater = TaskUpdater(event_queue=event_queue, task_id=task.id, context_id=task.context_id)
-        await updater.update_status(state=TaskState.TASK_STATE_WORKING, message=new_text_message("Task started."))
-        try:
-            message_text = get_message_text(context.message)
-            if not message_text:
-                raise ValueError("No input message was provided")
-            result = await _route(json.loads(message_text))
-            artifact_text = result if isinstance(result, str) else json.dumps(result)
-            await updater.add_artifact(parts=[new_text_part(text=artifact_text, media_type="application/json")])
-            await updater.update_status(state=TaskState.TASK_STATE_COMPLETED, message=new_text_message("Task completed."))
-        except Exception as exc:
-            error = {"error": str(exc), "type": type(exc).__name__}
-            await updater.add_artifact(parts=[new_text_part(text=json.dumps(error), media_type="application/json")])
-            await updater.update_status(state=TaskState.TASK_STATE_FAILED, message=new_text_message("Task failed."))
-
-    async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        raise NotImplementedError("Cancellation is not supported")
+Strict Field Invariants:
+• ROUTING KEY: Must provide "agent_type": "compliance" (falls back to compliance if omitted).
+• REQUIRED FIELDS: trial_id, recent_action, relevant_protocols.
+• OPTIONAL FIELDS: iteration (defaults to len(report_history) + 1), report_history (defaults to []).
+• HIPAA / DE-IDENTIFICATION: DO NOT pass "patient_id", "patient", or "patient_data" into the
+  compliance evaluation dispatch. The Master A2A Server rejects any compliance request containing
+  patient demographic identifiers with an immediate guardrail violation.
+• INITIAL EVALUATION: Set report_history to [] and iteration to 1 on the first pass.
 
 
-agent_card = AgentCard(
-    name="TrialGuard Unified Agent Gateway",
-    description="Routes TrialGuard compliance, safety, financial, and synthesis tasks.",
-    version="1.1.0",
-    default_input_modes=["text/plain"],
-    default_output_modes=["application/json"],
-    capabilities=AgentCapabilities(streaming=False),
-    supported_interfaces=[AgentInterface(url=A2A_URL, protocol_binding="JSONRPC", protocol_version="1.0")],
-    skills=[
-        AgentSkill(id="trial-compliance", name="Clinical Trial Compliance Evaluation", description="Checks an action against protocol text.", tags=["compliance"], examples=[], input_modes=["text/plain"], output_modes=["application/json"]),
-        AgentSkill(id="patient-safety", name="Patient Safety Evaluation", description="Evaluates patient-specific physiological safety.", tags=["safety"], examples=[], input_modes=["text/plain"], output_modes=["application/json"]),
-        AgentSkill(id="financial-coverage", name="Trial Financial & Billing Adjudication", description="Evaluates grant tier, coverage, and pre-auth.", tags=["financial"], examples=[], input_modes=["text/plain"], output_modes=["application/json"]),
-        AgentSkill(id="summary-synthesis", name="Review Summary Synthesis", description="Summarizes multi-agent results for clinician review.", tags=["summary"], examples=[], input_modes=["text/plain"], output_modes=["application/json"]),
-    ],
-)
+4. RESPONSE UNPACKING LOGIC
+-----------------------------
+The response is wrapped in an A2A task artifact envelope:
+
+1. Validate task status:
+   response["result"]["task"]["status"]["state"] in ("COMPLETED", "TASK_STATE_COMPLETED")
+2. Extract artifacts:
+   Iterate through response["result"]["task"]["artifacts"][].
+   Target the artifact where artifact["name"] == "compliance_result" or inspect artifact["parts"][].
+3. Parse:
+   json.loads(part["text"]) to obtain the canonical ComplianceVerdictRecord (Section 5).
 
 
-def build_app() -> Starlette:
-    handler = DefaultRequestHandler(agent_executor=TrialGuardExecutor(), task_store=InMemoryTaskStore(), agent_card=agent_card)
-    return Starlette(routes=create_agent_card_routes(agent_card) + create_jsonrpc_routes(handler, rpc_url="/rpc"))
+5. PARSED COMPLIANCE OUTPUT SCHEMA (ComplianceVerdictRecord)
+-------------------------------------------------------------
+Matches the exact TypedDict definition in shared_schemas.state:
+
+{
+  "trial_id": "string",
+  "iteration": integer,
+  "compliance_status": "COMPLIANT" | "NON_COMPLIANT" | "UNKNOWN",
+  "valid": boolean,
+  "confidence": number,
+  "violations": [
+    {
+      "parameter": "string",
+      "observed": "string" | number | object,
+      "expected": {
+        "operator": "string",
+        "value": "string" | number,
+        "unit": "string"
+      },
+      "protocol_text": "string",
+      "reason": "string"
+    }
+  ],
+  "explanation": "string",
+  "sources": [
+    {
+      "chunk_id": "string",
+      "section": "string",
+      "score": number,
+      "text": "string"
+    }
+  ],
+  "prescribed_action": {
+    "drug": "string",
+    "dosage": "string",
+    "frequency": "string",
+    "route": "string",
+    "raw_text": "string"
+  },
+  "needs_human_review": boolean
+}
+
+State Reducer Mapping in apps/orchestrator (TrialState):
+• Output Record       -> Appended to state["compliance_verdict_history"] via append_history_reducer
+• violations          -> Appended to state["violations"] via operator.add
+• needs_human_review  -> Synchronized to state["compliance_needed"] and state["needs_human_review"]
+• Complete output     -> Appended to state["audit_logs"] via operator.add
 
 
-app = build_app()
+6. THE HITL "MODIFY" CYCLE (compliance_verdict_history)
+---------------------------------------------------------
+When a clinician selects "modify" in HITL, updates the prescribed regimen, and loops
+back to evaluation via Command(goto="rag_analysis"):
+1. Orchestrator reads accumulated records from state["compliance_verdict_history"].
+2. Sets payload["iteration"] = state["refinement_iteration_count"] + 1.
+3. Passes prior iterations in payload["report_history"].
+4. The compliance engine on the Master A2A Server checks the updated regimen against protocol
+   boundaries in light of previous violations to confirm whether the dose titration or interval
+   change fully resolved the earlier deviation.
+5. The new ComplianceVerdictRecord is appended to state["compliance_verdict_history"],
+   preserving complete chronological auditability for downstream multi_agent_evaluation and PDF generation.
 
-if __name__ == "__main__":
-    print(f"--> Gateway binding on {HOST}:{PORT}")
-    print(f"--> local fallback available: compliance={evaluate_compliance is not None}, safety={evaluate_safety is not None}")
-    uvicorn.run(app, host=HOST, port=PORT)
+
+7. CONVERGENCE & MULTI-AGENT SYNTHESIS
+---------------------------------------
+• Fan-Out: parallel_processing_fan_out triggers compliance_agent, safety_agent, financial_agent,
+  and protocol_adjudication concurrently.
+• Multi-Agent Convergence: Output from compliance_agent converges at multi_agent_evaluation alongside
+  the other agents.
+• HITL Hand-off: multi_agent_evaluation synthesizes all sub-agent histories into a consolidated
+  verdict (APPROVED / REJECTED / NEEDS_REVIEW) and routes directly to hitl_escalation.
+
+
+8. ERROR HANDLING & RESILIENT FALLBACKS
+----------------------------------------
+• HTTP != 200 / Server Offline: Caught by compliance_client.py; switches to LOCAL_FALLBACK mode.
+• Fallback Execution: Evaluates deterministic protocol dosing limits (e.g. 5 mg apixaban ceiling) locally.
+• Injected Payload: If both remote A2A RPC and local rules fail, injects a fallback record:
+    - compliance_status = "UNKNOWN"
+    - valid = False
+    - confidence = 0.0
+    - needs_human_review = True
+• Audit Sealing: Flags state["compliance_needed"] = True, logs failure in state["audit_logs"],
+  and continues to multi_agent_evaluation without halting the LangGraph execution.

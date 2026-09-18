@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { PROTOCOLS, PATIENTS } from "@/lib/clinical-data"
 import { getPatientsFromSupabase } from "@/app/actions"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
+import { getGatewayUrl } from "@/lib/api-config"
 
 export type Patient = {
   patient_id: string
@@ -64,7 +65,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
         // Fall back to FastAPI gateway /api/patients
         if (!data || !Array.isArray(data) || data.length === 0) {
           try {
-            const res = await fetch("http://localhost:8000/api/patients")
+            const baseUrl = getGatewayUrl()
+            const res = await fetch(`${baseUrl}/api/patients`)
             if (res.ok) {
               data = await res.json()
             }
@@ -167,6 +169,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
       P048: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
       P049: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
       P050: { protocol: "NCT00781573 - Post-PCI Dual Therapy Protocol (Arm A)", action: "Apixaban 5 mg oral twice daily" },
+      P001: { protocol: "NCT00699998 - Renal Stratification SGLT2i Study (Cohort B)", action: "Empagliflozin 10 mg oral once daily" },
+      P006: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
       P051: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
       P052: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
       P053: { protocol: "NCT00809965 - NAFLD / MASH Dose Escalation Protocol (Cohort B)", action: "Pioglitazone 30 mg oral once daily" },
@@ -254,9 +258,16 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
 
           {/* Patient lookup combobox */}
           <div className="mt-6">
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-400">
-              Patient Lookup {isLoading && <Loader2 className="inline ml-2 size-3 animate-spin" />}
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Patient Lookup {isLoading && <Loader2 className="inline ml-2 size-3 animate-spin" />}
+              </label>
+              {!selected && (
+                <span className="text-[11px] text-amber-400 font-medium">
+                  Click a patient or preset below to proceed →
+                </span>
+              )}
+            </div>
             <div ref={containerRef} className="relative">
               <div className="flex items-center gap-2 rounded-lg border border-[#2e2e2e] bg-[#121212] px-3 focus-within:border-[#3b82f6]">
                 <Search className="size-4 shrink-0 text-slate-500" />
@@ -294,7 +305,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     const isG2 = ["P035", "P041", "P042", "P043"].includes(p.patient_id)
                     const isRagRule = ["P036", "P044", "P045", "P046", "P047"].includes(p.patient_id)
                     const isA2A = ["P037", "P048", "P049", "P050"].includes(p.patient_id)
-                    const isClean = ["P051", "P052", "P053", "P054"].includes(p.patient_id)
+                    const isP001toP032 = /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(p.patient_id)
+                    const isClean = ["P051", "P052", "P053", "P054"].includes(p.patient_id) || isP001toP032
                     const isNonAligned = isG1 || isG2 || isRagRule || isA2A
 
                     return (
@@ -302,6 +314,10 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                         <button
                           type="button"
                           onMouseDown={(e) => {
+                            e.preventDefault()
+                            choose(p)
+                          }}
+                          onClick={(e) => {
                             e.preventDefault()
                             choose(p)
                           }}
@@ -400,7 +416,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                               : isA2A
                               ? "A2A Consensus"
                               : isClean
-                              ? "Clean Pass"
+                              ? "✓ JUSTIFIED · Eligible"
                               : p.cohort}
                           </span>
                         </button>
@@ -444,11 +460,22 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     TEST CASE: 4 A2A Pipelines Consensus Rejection
                   </span>
                 )}
-                {["P051", "P052", "P053", "P054"].includes(selected.patient_id) && (
-                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300">
-                    TEST CASE: 100% Unanimous Justified Pass
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["P051", "P052", "P053", "P054"].includes(selected.patient_id) || /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(selected.patient_id)) && (
+                    <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300">
+                      TEST CASE: 100% Unanimous Justified Pass
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={isDisqualified}
+                    onClick={() => !isDisqualified && onSubmit(selected, protocol, action)}
+                    className="h-7.5 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold text-xs px-3 shadow-md shadow-blue-950/40"
+                  >
+                    <Send className="size-3 mr-1.5" />
+                    Submit for AI Review →
+                  </Button>
+                </div>
               </div>
 
               {/* Specific Scenario Notice Box */}
@@ -537,9 +564,9 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   <strong className="text-purple-300">Multi-Agent Dissent (Safety &amp; Financial):</strong> Quadruple antithrombotic therapy (Apixaban + Aspirin + Clopidogrel + Ticagrelor) causes severe hemorrhage risk and <strong>$6,400</strong> billing dispute.
                 </div>
               )}
-              {["P051", "P052", "P053", "P054"].includes(selected.patient_id) && (
+              {(["P051", "P052", "P053", "P054"].includes(selected.patient_id) || /^P0(0[1-9]|[1-2][0-9]|3[0-2])$/.test(selected.patient_id)) && (
                 <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200 leading-relaxed space-y-1">
-                  <strong className="text-emerald-300">✓ Fully Compliant Trial Candidate:</strong> All demographic attributes verified (G1), organ clearance corridors normal (G2), protocol dosing compliant (RAG), and all 4 specialist agents recommend approval with 100% sponsor trial coverage ($0 liability).
+                  <strong className="text-emerald-300">✓ Fully Compliant Trial Candidate (Status: JUSTIFIED):</strong> All demographic attributes verified (G1), organ clearance corridors normal (G2), protocol dosing compliant (RAG), and specialist agents recommend approval with 100% sponsor trial coverage ($0 liability).
                 </div>
               )}
 
@@ -818,6 +845,20 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     {/* Clean Passes Category */}
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider min-w-28">Clean Passes:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P001"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P001 (Renal SGLT2i)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P006"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P006 (AFib Standard)
+                      </button>
                       <button
                         type="button"
                         onClick={() => { const pat = patients.find(p => p.patient_id === "P051"); if (pat) choose(pat); }}

@@ -238,5 +238,9 @@
     "fhir_id": "synthetic-P054",
     "name": "David Kim",
     "cohort": "Cohort B - [All Pass: Unanimous Justified] Renal SGLT2i Stratification"
+  },
+  "P013": {
+    "fhir_id": "synthetic-P013",
+    "name": "Kavita Deshmukh"
   }
 }

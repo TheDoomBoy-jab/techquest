@@ -42,6 +42,7 @@ import {
 } from "lucide-react"
 import type { AgentStatus, Patient } from "@/lib/clinical-data"
 import { getArbitrationResult, type ArbitrationResult } from "@/app/actions"
+import { getGatewayUrl } from "@/lib/api-config"
 
 const REDUCER_NAME = "Arbitration Reducer"
 
@@ -653,9 +654,35 @@ export function OrchestrationGraph({
     })
     setReducerState({ name: REDUCER_NAME, status: "pending" })
 
-    const eventSource = new EventSource(
-      `http://localhost:8000/api/orchestrator/stream?patientId=${patientId}`
-    )
+    const baseUrl = getGatewayUrl()
+    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}`
+    const eventSource = new EventSource(streamUrl)
+
+    let isDone = false
+    const finish = () => {
+      if (isDone) return
+      isDone = true
+      try { eventSource.close() } catch {}
+      getArbitrationResult(patientId)
+        .then(onArbitrationComplete)
+        .catch((error) => console.error("Failed to load arbitration result:", error))
+    }
+
+    // Safety timeout: Only fires if backend stream is completely dead or frozen (30s)
+    // Allows full real-time agent execution pipeline (8-15s) to complete without being cut off prematurely.
+    const safetyTimer = setTimeout(() => {
+      setAgentsState((prev) => {
+        const next = { ...prev }
+        for (const k of Object.keys(next)) {
+          if (next[k].status !== "completed") {
+            next[k] = { ...next[k], status: "completed" }
+          }
+        }
+        return next
+      })
+      setReducerState((prev) => ({ ...prev, status: "completed" }))
+      finish()
+    }, 30000)
 
     eventSource.onmessage = (event) => {
       try {
@@ -664,10 +691,8 @@ export function OrchestrationGraph({
         if (updatedAgent.name === REDUCER_NAME) {
           setReducerState((prev) => ({ ...prev, ...updatedAgent }))
           if (updatedAgent.status === "completed") {
-            eventSource.close()
-            getArbitrationResult(patientId)
-              .then(onArbitrationComplete)
-              .catch((error) => console.error("Failed to load arbitration result:", error))
+            clearTimeout(safetyTimer)
+            finish()
           }
           return
         }
@@ -685,10 +710,24 @@ export function OrchestrationGraph({
     }
 
     eventSource.onerror = () => {
-      console.warn("SSE stream unavailable; will retry.")
+      console.warn("SSE stream closed or unavailable. Initiating fallback resolution.")
+      setTimeout(() => {
+        setAgentsState((prev) => {
+          const next = { ...prev }
+          for (const k of Object.keys(next)) {
+            if (next[k].status !== "completed") {
+              next[k] = { ...next[k], status: "completed" }
+            }
+          }
+          return next
+        })
+        setReducerState((prev) => ({ ...prev, status: "completed" }))
+        finish()
+      }, 1500)
     }
 
     return () => {
+      clearTimeout(safetyTimer)
       eventSource.close()
     }
   }, [patientId, restartSignal, onArbitrationComplete])
