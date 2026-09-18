@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Activity,
   AlertCircle,
@@ -43,8 +43,8 @@ import { getGatewayUrl } from "@/lib/api-config"
 type Props = {
   patient: Patient
   arbitrationResult: ArbitrationResult
-  onRestartStream?: () => void
-  onPatientUpdated?: (updatedPatient: Partial<Patient>) => void
+  onRestartStream?: (newAction?: string) => void
+  onPatientUpdated?: (updatedPatient: Partial<Patient> & { action?: string }) => void
   onPatientDisqualified?: (patientId: string) => void
 }
 
@@ -96,6 +96,9 @@ export function DecisionGateway({
     arbitrationResult.guardrail_1_result?.resupply_attempts || 0
   )
   const [modifyOpen, setModifyOpen] = useState(false)
+  const modifyDrawerRef = useRef<HTMLDivElement>(null)
+  const [isApplyingRemediation, setIsApplyingRemediation] = useState(false)
+  const [isSubmittingOverride, setIsSubmittingOverride] = useState(false)
   const [showDeepAudit, setShowDeepAudit] = useState(false)
   const [copiedPayload, setCopiedPayload] = useState(false)
   const [isSubmittingDecision, setIsSubmittingDecision] = useState(false)
@@ -701,9 +704,14 @@ export function DecisionGateway({
 
   // 1-Click Remediation Recommendation
   async function handleApplyRemediation() {
+    setIsApplyingRemediation(true)
     setComment(remPrompt)
     setModifyOpen(true)
     setIsExtracting(true)
+    setTimeout(() => {
+      modifyDrawerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }, 60)
+
     const standardized = remDose.includes("5 mg") ? "Apixaban 5 mg oral twice daily"
       : remDose.includes("200 mg") ? "Pembrolizumab 200 mg IV every 3 weeks"
       : remDose.includes("10 mg") ? "Empagliflozin 10 mg oral once daily"
@@ -719,6 +727,7 @@ export function DecisionGateway({
       console.warn("NLP auto-extraction note (standardized dose applied):", error)
     } finally {
       setIsExtracting(false)
+      setIsApplyingRemediation(false)
     }
   }
 
@@ -737,29 +746,40 @@ export function DecisionGateway({
 
   // Override Submit
   async function handleOverrideSubmit() {
-    if (extractionResult?.modifications?.[0]) {
+    setIsSubmittingOverride(true)
+    let updated = activeAction
+    if (extractionResult?.standardized_action) {
+      updated = extractionResult.standardized_action
+    } else if (extractionResult?.modifications?.[0]) {
       const mod = extractionResult.modifications[0]
-      const updated = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit || "mg"} oral twice daily`
-      setActiveAction(updated)
+      updated = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit || "mg"} ${mod.route || "oral"} ${mod.frequency || "twice daily"}`
     }
+    setActiveAction(updated)
     setOrderModified(true)
     setDecision("override")
-    setModifyOpen(false)
 
     try {
-      const result = await submitDecision(
+      await submitDecision(
         patient.id,
         "override",
         comment,
-        extractionResult?.modifications || []
+        extractionResult?.modifications || [],
+        extractionResult
       )
-      if (result?.status === "restarting") {
-        setExtractionResult(null)
-        setComment("")
-        onRestartStream?.()
-      }
+      setExtractionResult(null)
+      setComment("")
+      setModifyOpen(false)
+      onPatientUpdated?.({ action: updated })
+      onRestartStream?.(updated)
     } catch (error) {
       console.warn("Remote override dispatch warning (local override active):", error)
+      setExtractionResult(null)
+      setComment("")
+      setModifyOpen(false)
+      onPatientUpdated?.({ action: updated })
+      onRestartStream?.(updated)
+    } finally {
+      setIsSubmittingOverride(false)
     }
   }
 
@@ -2409,8 +2429,18 @@ export function DecisionGateway({
 
           <Button
             variant="outline"
-            onClick={() => setModifyOpen((v) => !v)}
-            className="h-12 flex-1 border-[#2e2e2e] bg-[#121212] font-semibold text-white hover:bg-[#252525] hover:text-white rounded-xl text-sm transition-all shadow-md"
+            onClick={() => {
+              setModifyOpen((v) => {
+                const next = !v
+                if (next) {
+                  setTimeout(() => {
+                    modifyDrawerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+                  }, 80)
+                }
+                return next
+              })
+            }}
+            className="h-12 flex-1 border-[#2e2e2e] bg-[#121212] font-semibold text-white hover:bg-[#252525] hover:text-white rounded-xl text-sm transition-all shadow-md active:scale-95"
           >
             <Pencil className="size-4 mr-2" />
             Modify Dosage / Override
@@ -2532,12 +2562,21 @@ export function DecisionGateway({
 
             <Button
               onClick={handleApplyRemediation}
-              disabled={isExtracting}
+              disabled={isExtracting || isApplyingRemediation}
               size="sm"
-              className="h-10 bg-amber-500 text-black font-bold hover:bg-amber-400 shrink-0 rounded-lg px-4 text-xs"
+              className="h-10 bg-amber-500 text-black font-bold hover:bg-amber-400 shrink-0 rounded-lg px-4 text-xs active:scale-95 transition-all"
             >
-              <Sparkles className="size-3.5 mr-1.5" />
-              Apply Dose Adjustment ({remDose})
+              {isApplyingRemediation || isExtracting ? (
+                <>
+                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                  Applying Dose Adjustment ({remDose})...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-3.5 mr-1.5" />
+                  Apply Dose Adjustment ({remDose})
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -2545,6 +2584,7 @@ export function DecisionGateway({
 
       {/* Modify / Override Drawer */}
       <div
+        ref={modifyDrawerRef}
         className={`grid transition-all duration-300 ease-out ${
           modifyOpen ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
@@ -2565,25 +2605,32 @@ export function DecisionGateway({
               </span>
             </div>
 
-            {/* AI Extraction State 1 */}
-            {!extractionResult?.is_valid && (
+            {/* AI Extraction State 1: Awaiting Input or Invalid / Warning */}
+            {(!extractionResult?.is_valid || extractionResult?.is_appropriate === false) && (
               <div className="space-y-4">
-                {extractionResult?.is_valid === false && (
-                  <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-amber-300">
-                    <AlertCircle className="size-5 shrink-0" />
-                    <p className="text-xs leading-relaxed">
-                      <span className="font-bold block mb-0.5">Clarification Required</span>
-                      {extractionResult.reasoning}
+                {extractionResult && (extractionResult.is_valid === false || extractionResult.is_appropriate === false) && (
+                  <div className="rounded-xl border border-rose-500/40 bg-rose-950/40 p-4 text-rose-300 space-y-2">
+                    <div className="flex items-center gap-2 font-bold text-rose-200 text-xs uppercase tracking-wider">
+                      <AlertTriangle className="size-4 shrink-0 text-rose-400" />
+                      ⚠️ Clinical Warning: Inappropriate or Ambiguous Doctor Note
+                    </div>
+                    <p className="text-xs text-rose-300 leading-relaxed">
+                      {extractionResult.warning || extractionResult.reasoning || "The entered note does not specify an actionable medication name or numerical dosage."}
                     </p>
+                    <div className="rounded border border-rose-800/40 bg-[#0c0507] p-2 text-[11px] font-mono text-slate-300">
+                      <span className="text-rose-400 font-bold">Action Required:</span> Provide a recognizable medication and target numerical dosage.
+                      <br />
+                      <span className="text-slate-400">Example:</span> &ldquo;Titrate Apixaban to 5 mg oral twice daily per protocol Arm A&rdquo;
+                    </div>
                   </div>
                 )}
 
-                <Field label="Clinical Rationale & Prescribed Parameters">
+                <Field label="Clinical Rationale & Doctor's Prescription Note">
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={4}
-                    placeholder="E.g., Patient demonstrates stable baseline with CrCl 65 mL/min. Adjust dosage to standard 5 mg BID per protocol Arm A guidelines..."
+                    placeholder="E.g., Patient exhibits normal CrCl 68 mL/min and stable renal clearance. Titrate apixaban to 5 mg oral twice daily per protocol Arm A specifications..."
                     className="w-full resize-none rounded-xl border border-[#2e2e2e] bg-[#1a1a1a] p-3.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none leading-relaxed"
                   />
                 </Field>
@@ -2596,41 +2643,72 @@ export function DecisionGateway({
                   {isExtracting ? (
                     <>
                       <Loader2 className="size-4 mr-2 animate-spin" />
-                      Analyzing Clinical Intent via NLP...
+                      Evaluating Doctor Note via Clinical LLM...
                     </>
                   ) : (
                     <>
                       <Sparkles className="size-4 mr-2" />
-                      Preview Protocol Adjustments
+                      Evaluate Doctor Note & Extract FHIR Updates
                     </>
                   )}
                 </Button>
               </div>
             )}
 
-            {/* AI Extraction State 2: Extracted Data Confirmed */}
-            {extractionResult?.is_valid && (
+            {/* AI Extraction State 2: Extracted Data Confirmed & Appropriate */}
+            {extractionResult?.is_valid && extractionResult?.is_appropriate !== false && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle2 className="size-4 text-emerald-400" />
-                    <p className="text-sm font-bold text-emerald-300">
-                      Extracted Parameters Verified by Clinical NLP
-                    </p>
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-emerald-400" />
+                      <p className="text-sm font-bold text-emerald-300">
+                        Doctor Note Validated by Clinical LLM
+                      </p>
+                    </div>
+                    {extractionResult.spelling_corrected && (
+                      <span className="rounded-full bg-sky-500/20 border border-sky-500/40 px-2.5 py-0.5 text-[10px] font-mono text-sky-300">
+                        Spelling Corrected: &ldquo;{extractionResult.original_spelling}&rdquo; &rarr; {extractionResult.standardized_drug}
+                      </span>
+                    )}
                   </div>
 
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {extractionResult.reasoning}
+                  </p>
+
                   <div className="grid gap-2">
-                    {extractionResult.modifications.map((mod: any, idx: number) => (
+                    {extractionResult.modifications?.map((mod: any, idx: number) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between rounded-lg bg-[#121212] border border-[#2e2e2e] p-3 text-xs"
+                        className="rounded-lg bg-[#121212] border border-[#2e2e2e] p-3 text-xs space-y-2"
                       >
-                        <span className="text-slate-300 font-medium">{mod.dosage_name}</span>
-                        <span className="font-mono font-bold text-sky-400">
-                          {mod.proposed_dosage} {mod.dosage_unit}
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-200 font-semibold text-sm">{mod.dosage_name}</span>
+                          <span className="font-mono font-bold text-emerald-400 text-sm">
+                            {mod.proposed_dosage} {mod.dosage_unit}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400 border-t border-[#222] pt-2">
+                          <div>
+                            <span className="text-slate-500 block text-[10px] uppercase">Frequency / Route</span>
+                            <span className="text-slate-200 font-medium">{mod.frequency || "twice daily"} ({mod.route || "oral"})</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px] uppercase">Timing Schedule</span>
+                            <span className="text-sky-300 font-medium">{mod.timing_schedule || "08:00, 20:00"}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-mono bg-[#0a0a0a] rounded px-2.5 py-1 border border-slate-800">
+                          <span className="text-slate-500">Target FHIR Field:</span>
+                          <span className="text-amber-300 font-semibold">{mod.target_field || "MedicationRequest.dosageInstruction[0]"}</span>
+                        </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="rounded border border-emerald-500/20 bg-emerald-950/20 p-2.5 text-[11px] text-emerald-300 font-mono">
+                    <span className="font-bold">Target Clinical Action:</span> {extractionResult.standardized_action || activeAction}
                   </div>
                 </div>
 
@@ -2640,14 +2718,24 @@ export function DecisionGateway({
                     onClick={() => setExtractionResult(null)}
                     className="h-11 flex-1 border-[#2e2e2e] bg-[#1a1a1a] text-white hover:bg-[#252525] rounded-xl text-sm"
                   >
-                    Edit Justification
+                    Edit Doctor Note
                   </Button>
                   <Button
                     onClick={handleOverrideSubmit}
-                    className="h-11 flex-[2] bg-emerald-500 text-white font-semibold hover:bg-emerald-400 rounded-xl text-sm shadow-lg shadow-emerald-950/30"
+                    disabled={isSubmittingOverride}
+                    className="h-11 flex-[2] bg-emerald-500 text-white font-semibold hover:bg-emerald-400 rounded-xl text-sm shadow-lg shadow-emerald-950/30 active:scale-95 transition-all"
                   >
-                    <Check className="size-4 mr-2" />
-                    Confirm & Dispatch Orchestrator
+                    {isSubmittingOverride ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Updating FHIR Database & Re-evaluating...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="size-4 mr-2" />
+                        Confirm & Update FHIR Database
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

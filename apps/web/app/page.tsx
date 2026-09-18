@@ -40,7 +40,10 @@ export default function Page() {
     setView("intake")
   }
 
-  function handleUpdatePatient(updated: Partial<Patient>) {
+  function handleUpdatePatient(updated: Partial<Patient> & { action?: string }) {
+    if (updated.action) {
+      setAction(updated.action)
+    }
     setPatient((prev) => (prev ? { ...prev, ...updated } : null))
   }
 

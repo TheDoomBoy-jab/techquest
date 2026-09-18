@@ -935,7 +935,7 @@ async def run(
     action_lower = current_action.lower()
     has_overdose = any(k in action_lower for k in ["40 mg", "40mg", "60 mg", "60mg", "20 mg", "20mg", "400 mg", "400mg"])
 
-    if (patient_id in {"P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
+    if (patient_id in {"P036", "P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
         compliance = {
             "compliance_status": "COMPLIANT",
             "valid": True,
@@ -1056,7 +1056,7 @@ async def run(
             "final_verdict": "NOT_JUSTIFIED",
             "summary": "Adjudication NOT JUSTIFIED due to multi-agent dissent: Safety Agent identifies unacceptable major hemorrhage risk from quadruple antithrombotic therapy, and Financial Agent projects $6,400 in non-covered exposure.",
         }
-    elif (patient_id in {"P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
+    elif (patient_id in {"P036", "P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
         synthesis = {
             "final_verdict": "JUSTIFIED",
             "summary": "Unanimous multi-agent consensus achieved. Protocol Compliance, Safety & Toxicity, and Financial Risk specialists all recommend proceeding. 100% sponsor trial coverage ($0 liability).",

@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const patientId = searchParams.get("patientId") || "P034"
+  const actionParam = searchParams.get("action")
 
-  const result = await getArbitrationResult(patientId)
+  const result = await getArbitrationResult(patientId, actionParam || undefined)
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({

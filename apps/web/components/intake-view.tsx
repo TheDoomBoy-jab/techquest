@@ -1,6 +1,6 @@
 "use client"
 
-import {useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Activity,
   Check,
@@ -10,10 +10,21 @@ import {
   Send,
   User,
   Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  Sparkles,
+  Sliders,
+  RotateCcw,
+  FileCheck2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PROTOCOLS, PATIENTS } from "@/lib/clinical-data"
-import { getPatientsFromSupabase } from "@/app/actions"
+import {
+  getPatientsFromSupabase,
+  processClinicalComment,
+  updateFhirDatabase,
+  type ClinicalExtractionResult,
+} from "@/app/actions"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
 import { getGatewayUrl } from "@/lib/api-config"
 
@@ -99,6 +110,14 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
   const [protocol, setProtocol] = useState(PROTOCOLS[0])
   const [action, setAction] = useState("Apixaban 5 mg oral twice daily")
   const containerRef = useRef<HTMLDivElement>(null)
+  const modifyDrawerRef = useRef<HTMLDivElement>(null)
+
+  const [modifyOpen, setModifyOpen] = useState(false)
+  const [doctorNote, setDoctorNote] = useState("")
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null)
+  const [fhirSynced, setFhirSynced] = useState(false)
+  const [fhirSyncing, setFhirSyncing] = useState(false)
 
   const isDisqualified = Boolean(selected && disqualifiedIds.includes(selected.patient_id))
 
@@ -106,6 +125,190 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     if (!selected) return null
     return evaluatePatientProfile(selected, action)
   }, [selected, action])
+
+  const dosingGuidelines = useMemo(() => {
+    if (!selected) return null
+    const meds = selected.medications || []
+    const cohort = selected.cohort || ""
+    const diagnosis = selected.diagnosis || ""
+    const selText = `${cohort} ${diagnosis} ${meds.join(" ")}`.toLowerCase()
+
+    let drug = "Apixaban"
+    let standardDose = "Apixaban 5 mg oral twice daily"
+    let escalatedDose = "Apixaban 40 mg oral twice daily"
+    let standardLabel = "✓ Standard 5 mg BID (Compliant)"
+    let escalatedLabel = "⚠️ Escalated 40 mg BID (Dose Violation)"
+
+    if (selText.includes("oncology") || selText.includes("pembrolizumab") || selText.includes("carcinoma") || selText.includes("cancer")) {
+      drug = "Pembrolizumab"
+      standardDose = "Pembrolizumab 200 mg IV every 3 weeks"
+      escalatedDose = "Pembrolizumab 400 mg IV every 3 weeks"
+      standardLabel = "✓ Standard 200 mg Q3W (Compliant)"
+      escalatedLabel = "⚠️ Escalated 400 mg Q3W (Dose Violation)"
+    } else if (selText.includes("renal") || selText.includes("empagliflozin") || selText.includes("nephropathy")) {
+      drug = "Empagliflozin"
+      standardDose = "Empagliflozin 10 mg oral once daily"
+      escalatedDose = "Empagliflozin 50 mg oral once daily"
+      standardLabel = "✓ Standard 10 mg Daily (Compliant)"
+      escalatedLabel = "⚠️ Escalated 50 mg Daily (Dose Violation)"
+    } else if (selText.includes("nafld") || selText.includes("mash") || selText.includes("pioglitazone") || selText.includes("steatohepatitis")) {
+      drug = "Pioglitazone"
+      standardDose = "Pioglitazone 30 mg oral once daily"
+      escalatedDose = "Pioglitazone 90 mg oral once daily"
+      standardLabel = "✓ Standard 30 mg Daily (Compliant)"
+      escalatedLabel = "⚠️ Escalated 90 mg Daily (Dose Violation)"
+    }
+
+    const actionLower = action.toLowerCase()
+    const isViolation =
+      actionLower.includes("40 mg") ||
+      actionLower.includes("40mg") ||
+      actionLower.includes("60 mg") ||
+      actionLower.includes("60mg") ||
+      actionLower.includes("400 mg") ||
+      actionLower.includes("400mg") ||
+      actionLower.includes("50 mg") ||
+      actionLower.includes("50mg") ||
+      actionLower.includes("90 mg") ||
+      actionLower.includes("90mg")
+
+    return {
+      drug,
+      standardDose,
+      escalatedDose,
+      standardLabel,
+      escalatedLabel,
+      isViolation,
+    }
+  }, [selected, action])
+
+  // Synchronize and persist to FHIR Database
+  async function executeFhirUpdate(res?: ClinicalExtractionResult | null, targetAction?: string) {
+    if (!selected) return
+    const activeRes = res || extractionResult
+    if (!activeRes || !activeRes.is_valid || activeRes.is_appropriate === false) return
+
+    setFhirSyncing(true)
+    try {
+      const mod = activeRes.modifications?.[0]
+      const stdDrug = activeRes.standardized_drug || mod?.dosage_name || dosingGuidelines?.drug || "Apixaban"
+      const dosageVal = activeRes.dosage ?? mod?.proposed_dosage ?? 5
+      const unitVal = activeRes.dosage_unit || mod?.dosage_unit || "mg"
+      const routeVal = activeRes.route || mod?.route || "oral"
+      const freqVal = activeRes.frequency || mod?.frequency || "twice daily"
+      const scheduleVal = activeRes.timing_schedule || mod?.timing_schedule || "08:00, 20:00"
+      const stdAction = activeRes.standardized_action || targetAction || action
+
+      await updateFhirDatabase(selected.patient_id, {
+        standardized_action: stdAction,
+        standardized_drug: stdDrug,
+        dosage: dosageVal,
+        dosage_unit: unitVal,
+        route: routeVal,
+        frequency: freqVal,
+        timing_schedule: scheduleVal,
+        doctor_note: doctorNote || action,
+        target_fhir_field: activeRes.target_fhir_field || mod?.target_field || "MedicationRequest.dosageInstruction[0]",
+      })
+
+      const freqAbbr =
+        freqVal.toLowerCase().includes("twice") || freqVal.toLowerCase().includes("bid")
+          ? "BID"
+          : freqVal.toLowerCase().includes("3 weeks") || freqVal.toLowerCase().includes("q3w")
+          ? "IV Q3W"
+          : "daily"
+      const newMedStr = `${stdDrug} ${dosageVal}${unitVal} ${freqAbbr}`
+      const existingMeds = Array.isArray(selected.medications) ? [...selected.medications] : []
+      const drugRegex = new RegExp(stdDrug, "i")
+      const updatedMeds = existingMeds.map((m) => (drugRegex.test(m) ? newMedStr : m))
+      if (!updatedMeds.some((m) => drugRegex.test(m))) {
+        updatedMeds.unshift(newMedStr)
+      }
+
+      const updatedPatient: Patient = {
+        ...selected,
+        medications: updatedMeds,
+        clinical_data: {
+          ...(selected.clinical_data || {}),
+          prescribed_action: stdAction,
+          medications: updatedMeds,
+          dosage_instructions: {
+            dose: Number(dosageVal) || dosageVal,
+            unit: unitVal,
+            frequency: freqVal,
+            timing_schedule: scheduleVal,
+            route: routeVal,
+          },
+        },
+      }
+
+      setSelected(updatedPatient)
+      setPatients((prev) => prev.map((p) => (p.patient_id === selected.patient_id ? updatedPatient : p)))
+      setAction(stdAction)
+      setFhirSynced(true)
+    } catch (err) {
+      console.error("FHIR update error:", err)
+    } finally {
+      setFhirSyncing(false)
+    }
+  }
+
+  // Apply 1-Click Protocol Remediation
+  async function handleApplyRemediation(targetDose?: string) {
+    if (!selected) return
+    const doseToApply = targetDose || dosingGuidelines?.standardDose || "Apixaban 5 mg oral twice daily"
+    setAction(doseToApply)
+    const promptText = `Adjust dosage to standard ${doseToApply} per protocol guidelines.`
+    setDoctorNote(promptText)
+    setIsExtracting(true)
+    setFhirSynced(false)
+
+    try {
+      const result = await processClinicalComment(promptText)
+      setExtractionResult(result)
+      if (result.is_valid && result.is_appropriate !== false) {
+        await executeFhirUpdate(result, doseToApply)
+      }
+    } catch (err) {
+      console.warn("Remediation evaluation fallback:", err)
+    } finally {
+      setIsExtracting(false)
+    }
+  }
+
+  // Clinical LLM Extraction & Evaluation
+  async function handleExtract(customText?: string) {
+    const textToEval = (customText ?? doctorNote ?? action).trim()
+    if (!textToEval) return
+    setIsExtracting(true)
+    setFhirSynced(false)
+    try {
+      const result = await processClinicalComment(textToEval)
+      setExtractionResult(result)
+      if (result.is_valid && result.is_appropriate !== false && result.standardized_action) {
+        setAction(result.standardized_action)
+      }
+    } catch (err) {
+      console.error("Clinical extraction error:", err)
+    } finally {
+      setIsExtracting(false)
+    }
+  }
+
+  // Handle Review Submission
+  async function handleSubmitClick() {
+    if (!selected || isDisqualified) return
+
+    if (extractionResult && (!extractionResult.is_valid || extractionResult.is_appropriate === false)) {
+      return
+    }
+
+    if (extractionResult?.is_valid && extractionResult.is_appropriate !== false && !fhirSynced) {
+      await executeFhirUpdate(extractionResult, action)
+    }
+
+    onSubmit(selected, protocol, action)
+  }
 
   useEffect(() => {
     async function fetchPatients() {
@@ -237,6 +440,10 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     if (PRESETS[pid]) {
       setProtocol(PRESETS[pid].protocol)
       setAction(PRESETS[pid].action)
+      setDoctorNote(PRESETS[pid].action)
+      setExtractionResult(null)
+      setFhirSynced(false)
+      setModifyOpen(false)
       return
     }
 
@@ -286,6 +493,9 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     } else {
       setAction("Apixaban 5 mg oral twice daily")
     }
+    setExtractionResult(null)
+    setFhirSynced(false)
+    setModifyOpen(false)
   }
 
   return (
@@ -792,7 +1002,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                         onClick={() => { const pat = patients.find(p => p.patient_id === "P036"); if (pat) choose(pat); }}
                         className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
                       >
-                        P036 (Overdose 40mg + Bleed)
+                        P036 (Overdose 40mg &rarr; Fix to Accept)
                       </button>
                       <button
                         type="button"
@@ -908,12 +1118,271 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
               )
             })()}
 
-            <textarea
-              value={action}
-              onChange={(e) => setAction(e.target.value)}
-              rows={3}
-              className="w-full resize-none rounded-lg border border-[#2e2e2e] bg-[#121212] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-[#3b82f6] focus:outline-none font-mono"
-            />
+            {/* Remediation Banner when Protocol Dose Violation is detected */}
+            {dosingGuidelines?.isViolation && (
+              <div className="mb-3 mt-3 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 animate-in fade-in duration-200">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-amber-300">Protocol Dosage Ceiling Exceeded:</span>{" "}
+                    Proposed dose violates trial safety boundaries. Recommended compliant target:{" "}
+                    <strong className="text-emerald-300 font-mono">{dosingGuidelines.standardDose}</strong>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isExtracting}
+                  onClick={() => handleApplyRemediation(dosingGuidelines.standardDose)}
+                  className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs h-8 px-3 rounded-lg shadow-sm transition-all"
+                >
+                  {isExtracting ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Sparkles className="size-3.5 mr-1 text-slate-950" />
+                      ⚡ 1-Click Fix to Standard
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Proposed Action / Prescription Input */}
+            <div className="space-y-2 mt-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <span>Prescription Order / Doctor&apos;s Narrative Note</span>
+                  {fhirSynced && (
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Check className="size-3" /> FHIR Synced
+                    </span>
+                  )}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModifyOpen((v) => {
+                      const next = !v
+                      if (next) {
+                        setTimeout(() => modifyDrawerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80)
+                      }
+                      return next
+                    })
+                  }}
+                  className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 font-medium transition-all active:scale-95"
+                >
+                  <Sliders className="size-3.5" />
+                  <span>{modifyOpen ? "Hide Override Panel" : "Modify Dosage / Override"}</span>
+                  <ChevronDown className={`size-3 transition-transform ${modifyOpen ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+
+              <textarea
+                value={action}
+                onChange={(e) => {
+                  setAction(e.target.value)
+                  setDoctorNote(e.target.value)
+                  setFhirSynced(false)
+                  if (extractionResult) setExtractionResult(null)
+                }}
+                rows={3}
+                placeholder="E.g., Apixaban 5 mg oral twice daily, or doctor note: 'Titrate apixiban to 5mg bid per protocol Arm A'..."
+                className="w-full resize-none rounded-lg border border-slate-700/50 bg-[#0B131F] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none font-mono"
+              />
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isExtracting || !action.trim()}
+                  onClick={() => handleExtract(action)}
+                  className="h-8 px-3 text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white rounded-lg transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Evaluating with Clinical LLM...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-3.5" />
+                      Evaluate Note via Clinical LLM
+                    </>
+                  )}
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  {dosingGuidelines && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAction(dosingGuidelines.standardDose)
+                        setDoctorNote(dosingGuidelines.standardDose)
+                        setFhirSynced(false)
+                        if (extractionResult) setExtractionResult(null)
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1 transition-all active:scale-95"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset to Standard ({dosingGuidelines.drug})
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modify / Override Drawer */}
+            {modifyOpen && (
+              <div ref={modifyDrawerRef} className="mt-3 rounded-xl border border-slate-700/50 bg-[#111C2D] p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between border-b border-slate-700/40 pb-2.5">
+                  <div>
+                    <p className="text-xs font-bold text-white uppercase tracking-wide">
+                      Physician Protocol Override & Clinical Rationale
+                    </p>
+                    <p className="text-[11px] text-amber-400 mt-0.5">
+                      Enter free-text clinical narrative, doctor notes, or dosage modifications
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/20">
+                    HITL Override Gate
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    Doctor&apos;s Prescription Note / Narrative Rationale
+                  </label>
+                  <textarea
+                    value={doctorNote}
+                    onChange={(e) => setDoctorNote(e.target.value)}
+                    rows={3}
+                    placeholder="E.g., Patient exhibits stable renal function (CrCl 68 mL/min). Titrate apixiban to 5 mg oral twice daily per protocol Arm A..."
+                    className="w-full resize-none rounded-lg border border-slate-700/50 bg-[#070D17] p-2.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none leading-relaxed font-mono"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isExtracting || !doctorNote.trim()}
+                    onClick={() => handleExtract(doctorNote)}
+                    className="h-8 px-3 text-xs bg-sky-500 hover:bg-sky-400 text-white font-semibold rounded-lg transition-all"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                        Extracting via Clinical LLM...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="size-3.5 mr-1.5" />
+                        Evaluate Rationale & Extract FHIR Updates
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* AI Extraction State 1: Clinical Warning (Inappropriate or Ambiguous) */}
+            {extractionResult && (!extractionResult.is_valid || extractionResult.is_appropriate === false) && (
+              <div className="mt-3 rounded-xl border border-rose-500/40 bg-rose-950/40 p-4 text-rose-300 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 font-bold text-rose-200 text-xs uppercase tracking-wider">
+                  <AlertTriangle className="size-4 shrink-0 text-rose-400" />
+                  ⚠️ Clinical Warning: Inappropriate or Ambiguous Doctor Note
+                </div>
+                <p className="text-xs text-rose-300 leading-relaxed">
+                  {extractionResult.warning || extractionResult.reasoning || "The entered note does not specify an actionable medication name or numerical dosage."}
+                </p>
+                <div className="rounded border border-rose-800/40 bg-[#0c0507] p-2.5 text-[11px] font-mono text-slate-300">
+                  <span className="text-rose-400 font-bold">Action Required:</span> Provide a recognizable medication and numerical target dosage.
+                  <br />
+                  <span className="text-slate-400">Example:</span> &ldquo;Titrate Apixaban to 5 mg oral twice daily per protocol Arm A&rdquo;
+                </div>
+              </div>
+            )}
+
+            {/* AI Extraction State 2: Extracted Data Confirmed & Appropriate */}
+            {extractionResult?.is_valid && extractionResult?.is_appropriate !== false && (
+              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3 animate-in fade-in duration-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-4 text-emerald-400" />
+                    <p className="text-sm font-bold text-emerald-300">
+                      Prescription & Note Validated by Clinical LLM
+                    </p>
+                  </div>
+                  {extractionResult.spelling_corrected && (
+                    <span className="rounded-full bg-sky-500/20 border border-sky-500/40 px-2.5 py-0.5 text-[10px] font-mono text-sky-300">
+                      Spelling Corrected: &ldquo;{extractionResult.original_spelling}&rdquo; &rarr; {extractionResult.standardized_drug}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {extractionResult.reasoning}
+                </p>
+
+                <div className="rounded-lg bg-[#111C2D] border border-slate-700/50 p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-200 font-semibold text-sm">
+                      {extractionResult.standardized_drug || extractionResult.modifications?.[0]?.dosage_name || "Prescription"}
+                    </span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                      {extractionResult.dosage || extractionResult.modifications?.[0]?.proposed_dosage} {extractionResult.dosage_unit || extractionResult.modifications?.[0]?.dosage_unit || "mg"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400 border-t border-slate-700/30 pt-2">
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase">Frequency / Route</span>
+                      <span className="text-slate-200 font-medium">
+                        {extractionResult.frequency || extractionResult.modifications?.[0]?.frequency || "twice daily"} ({extractionResult.route || extractionResult.modifications?.[0]?.route || "oral"})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[10px] uppercase">Timing Schedule</span>
+                      <span className="text-sky-300 font-medium">
+                        {extractionResult.timing_schedule || extractionResult.modifications?.[0]?.timing_schedule || "08:00, 20:00"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono bg-[#070D17] rounded px-2.5 py-1 border border-slate-800">
+                    <span className="text-slate-500">Target FHIR Field:</span>
+                    <span className="text-amber-300 font-semibold">
+                      {extractionResult.target_fhir_field || extractionResult.modifications?.[0]?.target_field || "MedicationRequest.dosageInstruction[0]"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="text-[11px] font-mono text-emerald-300">
+                    <span className="text-slate-400">Target Clinical Action:</span> {extractionResult.standardized_action || action}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={fhirSyncing}
+                    onClick={() => executeFhirUpdate()}
+                    className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all ${
+                      fhirSynced
+                        ? "bg-emerald-950 text-emerald-300 border border-emerald-700/60"
+                        : "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold"
+                    }`}
+                  >
+                    {fhirSyncing ? (
+                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                    ) : fhirSynced ? (
+                      <Check className="size-3.5 mr-1.5 text-emerald-400" />
+                    ) : (
+                      <FileCheck2 className="size-3.5 mr-1.5" />
+                    )}
+                    {fhirSynced ? "FHIR Database Synchronized" : "Confirm & Update FHIR Database"}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {isDisqualified && (
               <div className="mt-4 rounded-xl border border-rose-500/60 bg-gradient-to-r from-rose-950/60 via-[#1a0c0e] to-[#121212] p-4 space-y-2 text-xs text-rose-200 shadow-lg shadow-rose-950/40">
@@ -931,29 +1400,39 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
             )}
           </div>
 
-          <Button
-            disabled={!selected || isDisqualified}
-            onClick={() =>
-              selected && !isDisqualified && onSubmit(selected, protocol, action)
-            }
-            className={`mt-6 h-11 w-full font-semibold transition-all ${
-              isDisqualified
-                ? "bg-rose-950/80 border border-rose-700/60 text-rose-300 cursor-not-allowed shadow-inner"
-                : "bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 disabled:opacity-40"
-            }`}
-          >
-            {isDisqualified ? (
-              <>
-                <Lock className="size-4 mr-2 text-rose-400" />
-                Cannot Submit: Patient ID Permanently Excluded (3/3)
-              </>
-            ) : (
-              <>
-                <Send className="size-4 mr-2" />
-                Submit for AI Review
-              </>
-            )}
-          </Button>
+          {(() => {
+            const isWarningBlocked = Boolean(extractionResult && (!extractionResult.is_valid || extractionResult.is_appropriate === false))
+            return (
+              <Button
+                disabled={!selected || isDisqualified || isWarningBlocked}
+                onClick={handleSubmitClick}
+                className={`mt-6 h-11 w-full font-semibold transition-all ${
+                  isDisqualified
+                    ? "bg-rose-950/80 border border-rose-700/60 text-rose-300 cursor-not-allowed shadow-inner"
+                    : isWarningBlocked
+                    ? "bg-amber-950/80 border border-amber-700/60 text-amber-300 cursor-not-allowed"
+                    : "bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90 disabled:opacity-40"
+                }`}
+              >
+                {isDisqualified ? (
+                  <>
+                    <Lock className="size-4 mr-2 text-rose-400" />
+                    Cannot Submit: Patient ID Permanently Excluded (3/3)
+                  </>
+                ) : isWarningBlocked ? (
+                  <>
+                    <AlertTriangle className="size-4 mr-2 text-amber-400" />
+                    Action Blocked: Resolve Clinical Warning Above
+                  </>
+                ) : (
+                  <>
+                    <Send className="size-4 mr-2" />
+                    Submit for AI Review
+                  </>
+                )}
+              </Button>
+            )
+          })()}
           {!selected && (
             <p className="mt-2 text-center text-xs text-slate-500">
               Select a patient to enable submission.

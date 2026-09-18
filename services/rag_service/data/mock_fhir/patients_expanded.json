@@ -167,87 +167,87 @@
     {
       "patient_id": "P036",
       "assigned_demo_trial_id": "NCT02415400",
-      "cohort": "Cohort A - [Protocol Non-Compliant] Overdose & Active Hemorrhage",
+      "cohort": "Cohort A - [Dosing Non-Compliant] Supratherapeutic Dose (40 mg BID)",
       "demo_category": "SYNTHETIC_EHR_ERROR_RAG_RULES",
       "name": "Darius Vance",
       "default_prescribed_action": "Apixaban 40 mg oral twice daily",
       "patient": {
         "patient_id": "P036",
         "name": "Darius Vance",
-        "cohort": "Cohort A - [Protocol Non-Compliant] Overdose & Active Hemorrhage",
+        "cohort": "Cohort A - [Dosing Non-Compliant] Supratherapeutic Dose (40 mg BID)",
         "trial_id": "NCT02415400",
         "age": 68,
         "sex": "male",
         "dob": "1958-11-12",
         "weight": 79.0,
         "diagnoses": [
-          "Non-valvular atrial fibrillation post-PCI",
-          "Recent acute gastrointestinal hemorrhage"
+          "Non-valvular atrial fibrillation"
         ],
         "medications": [
           "Apixaban 40mg BID",
-          "Aspirin 325mg daily",
-          "Clopidogrel 75mg daily"
+          "Atorvastatin 20mg daily"
         ],
         "allergies": [],
         "lab_results": {
           "creatinine_clearance": {
-            "value": 42.0,
+            "value": 68.0,
             "unit": "mL/min"
           },
           "serum_creatinine": {
-            "value": 1.4,
+            "value": 1.0,
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 44.0,
+            "value": 72.0,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 32.0,
+            "value": 26.0,
             "unit": "U/L"
           },
           "AST": {
-            "value": 29.0,
+            "value": 22.0,
             "unit": "U/L"
           },
           "platelets": {
-            "value": 140000.0,
+            "value": 230000.0,
             "unit": "/uL"
           },
           "hemoglobin": {
-            "value": 9.2,
+            "value": 14.1,
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.3,
+            "value": 1.1,
             "unit": "ratio"
           },
           "total_bilirubin": {
-            "value": 0.9,
+            "value": 0.8,
             "unit": "mg/dL"
+          },
+          "ANC": {
+            "value": 4100.0,
+            "unit": "/uL"
           }
         },
         "vital_signs": {
-          "heart_rate": 88.0,
-          "blood_pressure_systolic": 118,
-          "blood_pressure_diastolic": 74
+          "heart_rate": 72.0,
+          "blood_pressure_systolic": 124,
+          "blood_pressure_diastolic": 78
         },
         "cardiac_function": {
-          "LVEF": 48.0,
-          "QTc": 440.0
+          "LVEF": 55.0,
+          "QTc": 420.0
         },
         "medical_history": [
-          "Acute upper GI bleeding 12 days prior",
-          "Drug-eluting stent placement 8 days prior"
+          "Appendectomy 1995"
         ],
-        "medical_history_narrative": "68-year-old male post-PCI undergoing antithrombotic evaluation. Prescribed Apixaban 40 mg BID (8x approved trial protocol maximum of 5 mg BID). Patient suffered endoscopic clipping of bleeding duodenal ulcer 12 days ago, violating the strict 30-day bleeding washout requirement.",
+        "medical_history_narrative": "68-year-old male presenting for antithrombotic evaluation. Prescribed Apixaban 40 mg BID (violating approved trial protocol ceiling of 5 mg BID). All baseline organ clearance and hematologic reserve parameters are completely normal.",
         "protocol_facts": {
-          "ongoing_bleeding": true,
+          "ongoing_bleeding": false,
           "history_of_intracranial_hemorrhage": false,
           "oral_anticoagulation_required": true,
-          "days_since_PCI": 8,
-          "days_since_major_bleed": 12
+          "days_since_major_bleed": null
         }
       }
     },

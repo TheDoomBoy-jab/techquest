@@ -11,6 +11,7 @@ export type Patient = {
   medications?: string[]
   clinical_data?: Record<string, any>
   report_history?: any[]
+  action?: string
 }
 
 export const PATIENTS: Patient[] = [
@@ -5350,29 +5351,40 @@ export const PATIENTS: Patient[] = [
     dob: "1958-11-12",
     age: 68,
     sex: "M",
-    cohort: "Cohort A - [Protocol Non-Compliant] Overdose & Active Hemorrhage",
-    diagnosis: "Non-valvular atrial fibrillation post-PCI",
-    creatinine: "CrCl 42 mL/min",
+    cohort: "Cohort A - [Dosing Non-Compliant] Supratherapeutic Dose (40 mg BID)",
+    diagnosis: "Non-valvular atrial fibrillation",
+    creatinine: "CrCl 68 mL/min",
     trial_id: "NCT02415400",
-    medications: ["Apixaban 40mg BID", "Aspirin 325mg daily", "Clopidogrel 75mg daily"],
+    medications: ["Apixaban 40mg BID", "Atorvastatin 20mg daily"],
+    action: "Apixaban 40 mg oral twice daily",
     clinical_data: {
       patient_id: "P036",
       name: "Darius Vance",
       age: 68,
       sex: "male",
-      diagnoses: ["Non-valvular atrial fibrillation post-PCI", "Recent acute gastrointestinal hemorrhage"],
-      medications: ["Apixaban 40mg BID", "Aspirin 325mg daily", "Clopidogrel 75mg daily"],
+      diagnoses: ["Non-valvular atrial fibrillation"],
+      medications: ["Apixaban 40mg BID", "Atorvastatin 20mg daily"],
+      prescribed_action: "Apixaban 40 mg oral twice daily",
       protocol_facts: {
-        ongoing_bleeding: true,
-        days_since_major_bleed: 12,
+        ongoing_bleeding: false,
+        days_since_major_bleed: null,
         oral_anticoagulation_required: true,
       },
       lab_results: {
-        creatinine_clearance: { value: 42.0, unit: "mL/min" },
-        serum_creatinine: { value: 1.4, unit: "mg/dL" },
-        ALT: { value: 32.0, unit: "U/L" },
-        AST: { value: 29.0, unit: "U/L" },
-        hemoglobin: { value: 9.2, unit: "g/dL" },
+        creatinine_clearance: { value: 68.0, unit: "mL/min" },
+        serum_creatinine: { value: 1.0, unit: "mg/dL" },
+        eGFR: { value: 72.0, unit: "mL/min/1.73m2" },
+        ALT: { value: 26.0, unit: "U/L" },
+        AST: { value: 22.0, unit: "U/L" },
+        total_bilirubin: { value: 0.8, unit: "mg/dL" },
+        ANC: { value: 4100.0, unit: "/uL" },
+        platelets: { value: 230000.0, unit: "/uL" },
+        hemoglobin: { value: 14.1, unit: "g/dL" },
+      },
+      vital_signs: {
+        heart_rate: 72,
+        blood_pressure_systolic: 124,
+        blood_pressure_diastolic: 78,
       },
     },
   },

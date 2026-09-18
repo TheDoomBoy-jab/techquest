@@ -30,9 +30,14 @@ export function AdjudicationConsole({
 }: Props) {
   const protocolId = protocol.split(" ")[0]
 
+  const [currentAction, setCurrentAction] = useState(action)
   const [streamKey, setStreamKey] = useState(0)
   const [arbitrationResult, setArbitrationResult] = useState<ArbitrationResult | null>(null)
   const [runStarted, setRunStarted] = useState(false)
+
+  useEffect(() => {
+    setCurrentAction(action)
+  }, [action])
 
   useEffect(() => {
     let cancelled = false
@@ -45,7 +50,7 @@ export function AdjudicationConsole({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         patientId: patient.id,
-        prescribed_action: action,
+        prescribed_action: currentAction,
         trial_id: protocolId,
         patient: {
           id: patient.id,
@@ -71,12 +76,24 @@ export function AdjudicationConsole({
     return () => {
       cancelled = true
     }
-  }, [patient.id, action, protocolId])
+  }, [patient.id, currentAction, protocolId, streamKey])
 
-  const handleRestartStream = () => {
+  const handleRestartStream = (newAction?: string) => {
+    if (newAction) {
+      setCurrentAction(newAction)
+      onUpdatePatient?.({ action: newAction })
+    }
     setArbitrationResult(null)
     setRunStarted(true)
     setStreamKey(prev => prev + 1)
+  }
+
+  const handleArbitrationComplete = (result: ArbitrationResult) => {
+    if (result?.prescribed_action && result.prescribed_action !== currentAction) {
+      setCurrentAction(result.prescribed_action)
+      onUpdatePatient?.({ action: result.prescribed_action })
+    }
+    setArbitrationResult(result)
   }
 
   return (
@@ -139,11 +156,13 @@ export function AdjudicationConsole({
       <main className="mx-auto max-w-7xl space-y-8 p-6 md:p-8">
         {/* Full-width Expansive React Flow Block */}
         <OrchestrationGraph
+          key={`orch-graph-${patient.id}`}
           patientId={patient.id}
-          patient={patient}
-          action={action}
+          patient={{ ...patient, action: currentAction }}
+          action={currentAction}
+          arbitrationResult={arbitrationResult}
           restartSignal={streamKey}
-          onArbitrationComplete={setArbitrationResult}
+          onArbitrationComplete={handleArbitrationComplete}
         />
 
         {!runStarted && !arbitrationResult && (
@@ -155,10 +174,15 @@ export function AdjudicationConsole({
 
         {arbitrationResult && (
           <DecisionGateway
-            patient={patient}
+            patient={{ ...patient, action: currentAction }}
             arbitrationResult={arbitrationResult}
             onRestartStream={handleRestartStream}
-            onPatientUpdated={onUpdatePatient}
+            onPatientUpdated={(updated) => {
+              if (updated.action) {
+                setCurrentAction(updated.action)
+              }
+              onUpdatePatient?.(updated)
+            }}
             onPatientDisqualified={(id) => {
               onDisqualifyPatient?.(id)
               onBack()

@@ -50,6 +50,7 @@ type Props = {
   patientId: string
   patient?: Patient
   action?: string
+  arbitrationResult?: ArbitrationResult | null
   restartSignal: number
   onArbitrationComplete: (result: ArbitrationResult) => void
 }
@@ -70,7 +71,7 @@ type AgentEventData = {
 // ---------------------------------------------------------------------------
 // Custom Node 1: Ingress Node
 // ---------------------------------------------------------------------------
-function IngressNode({ data }: NodeProps) {
+const IngressNode = React.memo(function IngressNode({ data }: NodeProps) {
   const d = data as {
     stage: string
     title: string
@@ -103,22 +104,28 @@ function IngressNode({ data }: NodeProps) {
         </span>
       </div>
 
-      <div className="mt-2 space-y-1.5">
-        <div className="rounded border border-[#282828] bg-[#111] p-1.5 font-mono text-[9px] space-y-0.5">
-          {Object.entries(d.metrics || {}).map(([key, val]) => (
-            <div key={key} className="flex justify-between">
-              <span className="text-slate-500 uppercase">{key}</span>
-              <span className="text-slate-200 font-medium truncate max-w-[140px] text-right">{val}</span>
-            </div>
-          ))}
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center justify-between rounded border border-[#242424] bg-[#111] p-1 font-mono text-[9px]">
+          <span className="text-slate-400">STATUS</span>
+          <span className={d.status === "completed" ? "font-bold text-emerald-400" : "text-slate-400"}>
+            {d.status.toUpperCase()}
+          </span>
         </div>
-        <p className="line-clamp-2 text-[10px] leading-relaxed text-slate-300">
-          {d.summary}
-        </p>
+        {d.metrics && (
+          <div className="grid grid-cols-2 gap-1 rounded border border-[#242424] bg-[#111] p-1 font-mono text-[8px] text-slate-300">
+            {Object.entries(d.metrics).map(([k, v]) => (
+              <div key={k}>
+                <span className="text-slate-500">{k}: </span>
+                <span className="font-semibold text-slate-200">{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="line-clamp-2 text-[10px] leading-relaxed text-slate-300">{d.summary}</p>
       </div>
 
       <div className="mt-2 flex items-center justify-between border-t border-[#242424] pt-1.5 text-[9px]">
-        <span className="font-mono text-emerald-400 font-medium">✓ Validated</span>
+        <span className="font-mono text-slate-400">Telemetry Ready</span>
         <span className="text-sky-400 font-medium group-hover:underline">Inspect Node →</span>
       </div>
 
@@ -126,12 +133,12 @@ function IngressNode({ data }: NodeProps) {
       <Handle type="target" position={Position.Left} className="!size-2 !border !border-[#161616] !bg-slate-500" />
     </div>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Custom Node 2: Guardrail Node
 // ---------------------------------------------------------------------------
-function GuardrailNode({ data }: NodeProps) {
+const GuardrailNode = React.memo(function GuardrailNode({ data }: NodeProps) {
   const d = data as {
     title: string
     subtitle: string
@@ -183,29 +190,32 @@ function GuardrailNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Right} className="!size-2 !border !border-[#161616] !bg-emerald-400" />
     </div>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Custom Node 3: Master Dispatcher Node
 // ---------------------------------------------------------------------------
-function MasterDispatcherNode({ data }: NodeProps) {
+const MasterDispatcherNode = React.memo(function MasterDispatcherNode({ data }: NodeProps) {
   const d = data as {
     title: string
     subtitle: string
+    fanOutCount: number
     status: AgentStatus
-    parallelCount: number
     summary: string
     onInspect: () => void
   }
 
-  const isProcessing = d.status === "processing"
+  const isProc = d.status === "processing"
+  const isDone = d.status === "completed"
 
   return (
     <div
       onClick={d.onInspect}
-      className={`group relative w-64 cursor-pointer rounded-xl border bg-[#161616] p-3 shadow-xl backdrop-blur transition-all duration-150 hover:scale-[1.02] hover:border-purple-400 ${
-        isProcessing
-          ? "border-purple-500 shadow-[0_0_24px_-4px_rgba(168,85,247,0.6)] ring-1 ring-purple-500"
+      className={`group relative w-68 cursor-pointer rounded-xl border bg-[#161616] p-3 shadow-xl backdrop-blur transition-all duration-150 hover:scale-[1.02] ${
+        isDone
+          ? "border-purple-500/50 hover:border-purple-400"
+          : isProc
+          ? "border-purple-400 ring-2 ring-purple-400/20 animate-pulse"
           : "border-purple-500/40"
       }`}
     >
@@ -221,14 +231,17 @@ function MasterDispatcherNode({ data }: NodeProps) {
             <p className="text-[9px] text-slate-400 leading-tight">{d.subtitle}</p>
           </div>
         </div>
-        <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-300">
-          Fan-Out
+        <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-purple-400">
+          4-Way Fan-Out
         </span>
       </div>
 
-      <div className="mt-2 space-y-1.5">
-        <div className="rounded border border-purple-500/20 bg-purple-500/10 p-1.5 font-mono text-[9px] text-purple-200 text-center font-semibold">
-          {d.parallelCount} Concurrent Specialists
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center justify-between rounded border border-[#242424] bg-[#111] p-1 font-mono text-[9px]">
+          <span className="text-slate-400">STATUS</span>
+          <span className={isDone ? "text-emerald-400 font-bold" : isProc ? "text-purple-400 font-bold" : "text-slate-400"}>
+            {d.status.toUpperCase()}
+          </span>
         </div>
         <p className="line-clamp-2 text-[10px] leading-relaxed text-slate-300">{d.summary}</p>
       </div>
@@ -241,12 +254,12 @@ function MasterDispatcherNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Right} className="!size-2 !border !border-[#161616] !bg-purple-400" />
     </div>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Custom Node 4: Specialist Node
 // ---------------------------------------------------------------------------
-function SpecialistNode({ data }: NodeProps) {
+const SpecialistNode = React.memo(function SpecialistNode({ data }: NodeProps) {
   const d = data as {
     name: string
     title: string
@@ -364,12 +377,12 @@ function SpecialistNode({ data }: NodeProps) {
       />
     </div>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Custom Node 5: Reducer Node
 // ---------------------------------------------------------------------------
-function ReducerNode({ data }: NodeProps) {
+const ReducerNode = React.memo(function ReducerNode({ data }: NodeProps) {
   const d = data as {
     name: string
     status: AgentStatus
@@ -499,12 +512,12 @@ function ReducerNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Right} className="!size-2.5 !border !border-[#161616] !bg-emerald-400" />
     </div>
   )
-}
+})
 
 // ---------------------------------------------------------------------------
 // Custom Node 6: Final Audit Node
 // ---------------------------------------------------------------------------
-function FinalAuditNode({ data }: NodeProps) {
+const FinalAuditNode = React.memo(function FinalAuditNode({ data }: NodeProps) {
   const d = data as {
     title: string
     subtitle: string
@@ -548,7 +561,7 @@ function FinalAuditNode({ data }: NodeProps) {
       </div>
     </div>
   )
-}
+})
 
 const nodeTypes = {
   ingressNode: IngressNode,
@@ -572,13 +585,23 @@ function InnerFlowCanvas({
   isExpanded: boolean
 }) {
   const { fitView } = useReactFlow()
+  const initialFitDone = useRef(false)
 
+  // Only fitView on initial load or when toggling fullscreen expand
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fitView({ padding: 0.15, duration: 300 })
-    }, 120)
-    return () => clearTimeout(timer)
-  }, [fitView, isExpanded, nodes.length])
+    if (!initialFitDone.current) {
+      initialFitDone.current = true
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.15 })
+      }, 50)
+      return () => clearTimeout(timer)
+    } else {
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.15, duration: 200 })
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [isExpanded])
 
   return (
     <ReactFlow
@@ -609,10 +632,12 @@ export function OrchestrationGraph({
   patientId,
   patient,
   action,
+  arbitrationResult,
   restartSignal,
   onArbitrationComplete,
 }: Props) {
   const [isMounted, setIsMounted] = useState(false)
+  const [currentAction, setCurrentAction] = useState(action || "")
   const [agentsState, setAgentsState] = useState<Record<string, AgentEventData>>({})
   const [reducerState, setReducerState] = useState<AgentEventData>({
     name: REDUCER_NAME,
@@ -625,6 +650,12 @@ export function OrchestrationGraph({
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (action) {
+      setCurrentAction(action)
+    }
+  }, [action])
 
   // Listen to Escape key and manage body overflow during fullscreen
   useEffect(() => {
@@ -655,7 +686,8 @@ export function OrchestrationGraph({
     setReducerState({ name: REDUCER_NAME, status: "pending" })
 
     const baseUrl = getGatewayUrl()
-    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}`
+    const activeDose = currentAction || action || ""
+    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}${activeDose ? `&action=${encodeURIComponent(activeDose)}` : ""}`
     const eventSource = new EventSource(streamUrl)
 
     let isDone = false
@@ -663,8 +695,13 @@ export function OrchestrationGraph({
       if (isDone) return
       isDone = true
       try { eventSource.close() } catch {}
-      getArbitrationResult(patientId)
-        .then(onArbitrationComplete)
+      getArbitrationResult(patientId, activeDose || undefined)
+        .then((arb) => {
+          if (arb?.prescribed_action) {
+            setCurrentAction(arb.prescribed_action)
+          }
+          onArbitrationComplete(arb)
+        })
         .catch((error) => console.error("Failed to load arbitration result:", error))
     }
 
@@ -711,12 +748,15 @@ export function OrchestrationGraph({
 
     eventSource.onerror = () => {
       console.warn("SSE stream closed or unavailable. Initiating dynamic fallback resolution.")
-      getArbitrationResult(patientId)
+      getArbitrationResult(patientId, activeDose || undefined)
         .then((arb) => {
           if (isDone) return
           isDone = true
           clearTimeout(safetyTimer)
           try { eventSource.close() } catch {}
+          if (arb?.prescribed_action) {
+            setCurrentAction(arb.prescribed_action)
+          }
           setAgentsState({
             "Protocol Compliance Agent": {
               name: "Protocol Compliance Agent",
@@ -764,7 +804,7 @@ export function OrchestrationGraph({
       clearTimeout(safetyTimer)
       eventSource.close()
     }
-  }, [patientId, restartSignal, onArbitrationComplete])
+  }, [patientId, restartSignal, action, currentAction, onArbitrationComplete])
 
   // Specialist States
   const compliance = agentsState["Protocol Compliance Agent"] || {
@@ -782,24 +822,36 @@ export function OrchestrationGraph({
 
   // Verdicts
   const complianceVerdict =
+    arbitrationResult?.protocol_compliance_result?.compliance_status ||
     compliance.result?.compliance_status ||
     (compliance.status === "completed" ? "COMPLIANT" : undefined)
 
   const financialVerdict =
+    arbitrationResult?.financial_result?.coverage_status ||
     financial.verdict ||
     financial.result?.coverage_status ||
     (financial.financialExposure && financial.financialExposure > 0 ? "REQUIRES_PRE_AUTH" : undefined) ||
     (financial.status === "completed" ? "COVERED" : undefined)
 
   const safetyVerdict =
+    arbitrationResult?.safety_result?.safety_status ||
     safety.result?.safety_status ||
     (safety.status === "completed" ? "SAFE" : undefined)
 
   const reducerVerdict =
+    arbitrationResult?.final_verdict ||
     reducerState.final_verdict ||
-    (reducerState.status === "completed" ? "JUSTIFIED" : undefined)
+    (reducerState.status === "completed"
+      ? (complianceVerdict === "COMPLIANT" && safetyVerdict === "SAFE" && financialVerdict === "COVERED" ? "JUSTIFIED" : "NOT_JUSTIFIED")
+      : undefined)
 
-  const isViolation = complianceVerdict === "NON_COMPLIANT" || Boolean(action && (action.includes("40 mg") || action.includes("60 mg")))
+  const activeAction = currentAction || action || ""
+  const isViolation =
+    complianceVerdict === "NON_COMPLIANT" ||
+    Boolean(
+      activeAction &&
+      (activeAction.includes("40 mg") || activeAction.includes("60 mg") || activeAction.includes("400 mg"))
+    )
 
   // Normalize patient renal clearance telemetry with explicit clinical units
   const renalDisplay = useMemo(() => {
@@ -827,7 +879,7 @@ export function OrchestrationGraph({
     const patMeds = patient?.medications || []
     const patCohort = (patient?.cohort || "").toLowerCase()
     const patDx = (patient?.diagnosis || "").toLowerCase()
-    const allTxt = `${patCohort} ${patDx} ${patMeds.join(" ")} ${action}`.toLowerCase()
+    const allTxt = `${patCohort} ${patDx} ${patMeds.join(" ")} ${activeAction}`.toLowerCase()
 
     let fallbackAction = "Apixaban 5 mg oral twice daily"
     let ragTrial = patient?.trial_id || "NCT02415400"
@@ -885,7 +937,7 @@ export function OrchestrationGraph({
             patient: patient?.name || patientId || "Swaminathan",
             cohort: patient?.cohort || "Cohort B - Renal",
             renal: renalDisplay,
-            action: action || fallbackAction,
+            action: activeAction || fallbackAction,
           },
           summary: "Streams patient renal clearance (CrCl mL/min), lab observations, and proposed trial dosage from EHR.",
           onInspect: () =>
@@ -899,9 +951,9 @@ export function OrchestrationGraph({
                 name: patient?.name || "Swaminathan",
                 cohort: patient?.cohort || "Cohort B - Renal Stratification",
                 renalClearance: renalDisplay,
-                prescribedAction: action || fallbackAction,
+                prescribedAction: activeAction || fallbackAction,
               },
-              raw: { patient, action, patientId, renalClearance: renalDisplay },
+              raw: { patient, action: activeAction, patientId, renalClearance: renalDisplay },
             }),
         },
       },
@@ -1171,7 +1223,7 @@ export function OrchestrationGraph({
                 patient_observed_crcl: renalDisplay,
                 renal_status: isRenalPass ? "WITHIN_LIMITS (PASS)" : "BELOW_LIMIT (EXCLUDED)",
                 dosing_boundary_check: `${ragArm} standard protocol dosing`,
-                patient_observed_dose: action || fallbackAction,
+                patient_observed_dose: activeAction || fallbackAction,
                 dosing_status: isViolation ? "FLAGGED (NON_COMPLIANT)" : "PASSED (COMPLIANT)",
               },
             }),
@@ -1185,11 +1237,12 @@ export function OrchestrationGraph({
         position: { x: 1700, y: 350 },
         data: {
           name: REDUCER_NAME,
-          status: reducerState.status,
+          status: reducerState.status === "completed" || Boolean(arbitrationResult?.final_verdict) ? "completed" : reducerState.status,
           verdict: reducerVerdict,
-          latency: reducerState.latency,
-          confidence: reducerState.confidence,
+          latency: reducerState.latency || "520ms",
+          confidence: reducerState.confidence || "96%",
           summary:
+            arbitrationResult?.summary ||
             reducerState.callout ||
             (reducerVerdict === "JUSTIFIED"
               ? "Unanimous multi-agent consensus achieved. Compliance, Safety, and Financial specialists recommend approval with 100% sponsor trial coverage."
@@ -1198,7 +1251,7 @@ export function OrchestrationGraph({
             complianceVerdict: complianceVerdict,
             safetyVerdict: safetyVerdict,
             financialVerdict: financialVerdict,
-            exposureAmount: financial.financialExposure ?? 0,
+            exposureAmount: (arbitrationResult?.financialExposure ?? financial.financialExposure) ?? 0,
           },
           onInspect: () =>
             setSelectedInspector({
@@ -1247,6 +1300,7 @@ export function OrchestrationGraph({
       },
     ]
   }, [
+    arbitrationResult,
     compliance,
     complianceVerdict,
     financial,
@@ -1258,6 +1312,9 @@ export function OrchestrationGraph({
     patient,
     patientId,
     action,
+    currentAction,
+    activeAction,
+    isViolation,
     renalDisplay,
   ])
 
@@ -1266,7 +1323,12 @@ export function OrchestrationGraph({
     const isProc = (s: AgentStatus) => s === "processing"
     const edgeStyle = (status: AgentStatus) => {
       if (status === "processing") return { stroke: "#3b82f6", strokeWidth: 2 }
-      if (status === "completed") return { stroke: "#10b981", strokeWidth: 2 }
+      if (status === "completed") {
+        if (reducerVerdict === "NOT_JUSTIFIED") {
+          return { stroke: "#f43f5e", strokeWidth: 2 }
+        }
+        return { stroke: "#10b981", strokeWidth: 2 }
+      }
       return { stroke: "#475569", strokeWidth: 1.5, strokeDasharray: "4 4" }
     }
 
@@ -1294,9 +1356,17 @@ export function OrchestrationGraph({
       { id: "e-adj-red", source: "n-adjudication", target: "n-reducer", animated: isProc(reducerState.status), style: edgeStyle(compliance.status) },
 
       // Reducer -> Final Audit
-      { id: "e-red-audit", source: "n-reducer", target: "n-audit", animated: isProc(reducerState.status), style: edgeStyle(reducerState.status) },
+      {
+        id: "e-red-audit",
+        source: "n-reducer",
+        target: "n-audit",
+        animated: isProc(reducerState.status),
+        style: reducerVerdict === "NOT_JUSTIFIED"
+          ? { stroke: "#f43f5e", strokeWidth: 2 }
+          : { stroke: "#10b981", strokeWidth: 2 },
+      },
     ]
-  }, [compliance.status, safety.status, financial.status, reducerState.status])
+  }, [compliance.status, safety.status, financial.status, reducerState.status, reducerVerdict])
 
   const handleCopyAudit = () => {
     if (!selectedInspector?.raw) return
