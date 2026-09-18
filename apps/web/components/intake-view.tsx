@@ -148,25 +148,33 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     const diagnosis = patient.diagnosis || ""
     const allText = `${cohort} ${diagnosis} ${meds.join(" ")}`.toLowerCase()
 
-    // 1. Direct handler for Non-Aligned Scenario Test Patients
-    if (pid === "P034") {
-      setProtocol("NCT02415400 - Cohort A Standard Protocol")
-      setAction("Apixaban 5 mg oral twice daily")
-      return
+    // 1. Direct handler for Scenario Test Patients (G1, G2, RAG, A2A, and Clean Justified)
+    const PRESETS: Record<string, { protocol: string; action: string }> = {
+      P034: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
+      P038: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
+      P039: { protocol: "NCT00699998 - Renal Stratification SGLT2i Study (Cohort B)", action: "Empagliflozin 10 mg oral once daily" },
+      P040: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Capecitabine 1000 mg oral twice daily" },
+      P035: { protocol: "NCT00809965 - NAFLD / MASH Dose Escalation Protocol (Cohort B)", action: "Pioglitazone 30 mg oral once daily" },
+      P041: { protocol: "NCT00699998 - Renal Stratification SGLT2i Study (Cohort B)", action: "Empagliflozin 10 mg oral once daily" },
+      P042: { protocol: "NCT00809965 - NAFLD / MASH Dose Escalation Protocol (Cohort B)", action: "Pioglitazone 30 mg oral once daily" },
+      P043: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
+      P036: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 40 mg oral twice daily" },
+      P044: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 60 mg oral twice daily" },
+      P045: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
+      P046: { protocol: "NCT00699998 - Renal Stratification SGLT2i Study (Cohort B)", action: "Empagliflozin 10 mg oral once daily" },
+      P047: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
+      P037: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 400 mg IV every 3 weeks" },
+      P048: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
+      P049: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
+      P050: { protocol: "NCT00781573 - Post-PCI Dual Therapy Protocol (Arm A)", action: "Apixaban 5 mg oral twice daily" },
+      P051: { protocol: "NCT02415400 - Phase II Antithrombotic Trial (Arm A: Apixaban 5mg BID)", action: "Apixaban 5 mg oral twice daily" },
+      P052: { protocol: "NCT02415400 - Cohort C Solid Tumor Oncology (Pembrolizumab 200mg Q3W)", action: "Pembrolizumab 200 mg IV every 3 weeks" },
+      P053: { protocol: "NCT00809965 - NAFLD / MASH Dose Escalation Protocol (Cohort B)", action: "Pioglitazone 30 mg oral once daily" },
+      P054: { protocol: "NCT00699998 - Renal Stratification SGLT2i Study (Cohort B)", action: "Empagliflozin 10 mg oral once daily" },
     }
-    if (pid === "P035") {
-      setProtocol("NCT00809965 - Cohort B NAFLD Protocol")
-      setAction("Pioglitazone 30 mg oral once daily")
-      return
-    }
-    if (pid === "P036") {
-      setProtocol("NCT02415400 - Cohort A Standard Protocol")
-      setAction("Apixaban 40 mg oral twice daily")
-      return
-    }
-    if (pid === "P037") {
-      setProtocol("NCT02415400 - Cohort C Solid Tumor Oncology")
-      setAction("Pembrolizumab 400 mg IV every 3 weeks")
+    if (PRESETS[pid]) {
+      setProtocol(PRESETS[pid].protocol)
+      setAction(PRESETS[pid].action)
       return
     }
 
@@ -282,10 +290,11 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   )}
                   {results.map((p) => {
                     const isDisqualifiedItem = disqualifiedIds.includes(p.patient_id)
-                    const isG1 = p.patient_id === "P034"
-                    const isG2 = p.patient_id === "P035"
-                    const isRagRule = p.patient_id === "P036"
-                    const isA2A = p.patient_id === "P037"
+                    const isG1 = ["P034", "P038", "P039", "P040"].includes(p.patient_id)
+                    const isG2 = ["P035", "P041", "P042", "P043"].includes(p.patient_id)
+                    const isRagRule = ["P036", "P044", "P045", "P046", "P047"].includes(p.patient_id)
+                    const isA2A = ["P037", "P048", "P049", "P050"].includes(p.patient_id)
+                    const isClean = ["P051", "P052", "P053", "P054"].includes(p.patient_id)
                     const isNonAligned = isG1 || isG2 || isRagRule || isA2A
 
                     return (
@@ -301,6 +310,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                               ? "border-l-2 border-rose-600 bg-rose-950/20"
                               : isNonAligned
                               ? "border-l-2 border-amber-500/80 bg-[#161616]"
+                              : isClean
+                              ? "border-l-2 border-emerald-500/80 bg-emerald-950/10"
                               : ""
                           }`}
                         >
@@ -315,6 +326,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                                   ? "bg-amber-500/20 text-amber-400"
                                   : isA2A
                                   ? "bg-purple-500/20 text-purple-400"
+                                  : isClean
+                                  ? "bg-emerald-500/20 text-emerald-400"
                                   : "bg-[#121212] text-slate-400"
                               }`}
                             >
@@ -350,6 +363,11 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                                     4 A2A Rejection
                                   </span>
                                 )}
+                                {isClean && (
+                                  <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-300 border border-emerald-500/30">
+                                    ✓ Justified Pass
+                                  </span>
+                                )}
                               </div>
                               <span className="block font-mono text-xs text-slate-500">
                                 {p.patient_id} · {p.diagnosis}
@@ -366,6 +384,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                                 ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
                                 : isA2A
                                 ? "border-purple-500/40 bg-purple-500/10 text-purple-300"
+                                : isClean
+                                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-semibold"
                                 : "border-[#2e2e2e] bg-[#121212] text-slate-300"
                             }`}
                           >
@@ -379,6 +399,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                               ? "RAG Dosing"
                               : isA2A
                               ? "A2A Consensus"
+                              : isClean
+                              ? "Clean Pass"
                               : p.cohort}
                           </span>
                         </button>
@@ -402,24 +424,29 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     Subject Profile Loaded · Verified EMR Record
                   </span>
                 </div>
-                {selected.patient_id === "P034" && (
+                {["P034", "P038", "P039", "P040"].includes(selected.patient_id) && (
                   <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
                     TEST CASE: Guardrail-1 Ingress Failure
                   </span>
                 )}
-                {selected.patient_id === "P035" && (
+                {["P035", "P041", "P042", "P043"].includes(selected.patient_id) && (
                   <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-rose-300">
                     TEST CASE: Guardrail-2 Hard Boundary Breach
                   </span>
                 )}
-                {selected.patient_id === "P036" && (
+                {["P036", "P044", "P045", "P046", "P047"].includes(selected.patient_id) && (
                   <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
                     TEST CASE: Protocol & RAG Rules Non-Compliance
                   </span>
                 )}
-                {selected.patient_id === "P037" && (
+                {["P037", "P048", "P049", "P050"].includes(selected.patient_id) && (
                   <span className="rounded-full border border-purple-500/40 bg-purple-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300">
                     TEST CASE: 4 A2A Pipelines Consensus Rejection
+                  </span>
+                )}
+                {["P051", "P052", "P053", "P054"].includes(selected.patient_id) && (
+                  <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300">
+                    TEST CASE: 100% Unanimous Justified Pass
                   </span>
                 )}
               </div>
@@ -430,9 +457,39 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   <strong className="text-rose-300">Mandatory Demographics Missing:</strong> Patient age is unrecorded and biological sex is empty. Designed to trigger <strong>Guardrail-1 Ingress Validation</strong> failure per 21 CFR 312.62. Clinician resupply console will activate during adjudication session.
                 </div>
               )}
+              {selected.patient_id === "P038" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Missing Biological Sex:</strong> Age is recorded (62 yrs), but biological sex is unrecorded. Triggers <strong>Guardrail-1 Ingress Failure</strong> requiring clinician sex specification.
+                </div>
+              )}
+              {selected.patient_id === "P039" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Missing Patient Age:</strong> Sex is recorded (Male), but age/DOB is missing. Triggers <strong>Guardrail-1 Ingress Failure</strong> requiring clinician age specification for PK margin evaluation.
+                </div>
+              )}
+              {selected.patient_id === "P040" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Multiple Ingress Deficits:</strong> Both age and biological sex are unrecorded. Triggers dual-attribute <strong>Guardrail-1 Ingress Failure</strong>.
+                </div>
+              )}
               {selected.patient_id === "P035" && (
                 <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
-                  <strong className="text-rose-300">Catastrophic Boundary Breach:</strong> ALT is <strong>620.0 U/L</strong> (&gt;5x ULN) and AST is <strong>480.0 U/L</strong>. Designed to trigger <strong>Guardrail-2 Immediate Short-Circuit</strong> and stop drug administration.
+                  <strong className="text-rose-300">Catastrophic Boundary Breach:</strong> ALT is <strong>620.0 U/L</strong> (&gt;5x ULN) and AST is <strong>480.0 U/L</strong>. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong> stopping drug administration.
+                </div>
+              )}
+              {selected.patient_id === "P041" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Catastrophic Renal Failure:</strong> eGFR is <strong>11.0 mL/min/1.73m2</strong> (&lt; 15.0 ESRD floor) and serum creatinine is 5.2 mg/dL. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong>.
+                </div>
+              )}
+              {selected.patient_id === "P042" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Severe Hyperbilirubinemia & Liver Collapse:</strong> Total bilirubin is <strong>6.8 mg/dL</strong> (&gt; 4.0 ceiling) with ALT 310 U/L and AST 285 U/L. Triggers <strong>Guardrail-2 Immediate Short-Circuit</strong>.
+                </div>
+              )}
+              {selected.patient_id === "P043" && (
+                <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200 leading-relaxed space-y-1">
+                  <strong className="text-rose-300">Severe Agranulocytosis:</strong> ANC is <strong>320.0 /uL</strong> (&lt; 500 ceiling) with platelets 28,000 /uL. Triggers <strong>Guardrail-2 Critical Hematologic Short-Circuit</strong>.
                 </div>
               )}
               {selected.patient_id === "P036" && (
@@ -440,9 +497,49 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   <strong className="text-amber-300">Protocol Rule Violation:</strong> Prescribed dose is <strong>40 mg BID</strong> (exceeds 5 mg limit) and patient suffered acute hemorrhage <strong>12 days ago</strong> (violates 30-day washout).
                 </div>
               )}
+              {selected.patient_id === "P044" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
+                  <strong className="text-amber-300">Massive Overdose Violation:</strong> Prescribed action is <strong>60 mg BID</strong> (12-fold higher than approved 5 mg BID ceiling). Triggers RAG rule rejection.
+                </div>
+              )}
+              {selected.patient_id === "P045" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
+                  <strong className="text-amber-300">Acute Bleeding Washout Violation:</strong> Patient had acute lower GI hemorrhage <strong>8 days ago</strong> (protocol mandates at least 30 days washout). Triggers RAG rule rejection.
+                </div>
+              )}
+              {selected.patient_id === "P046" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
+                  <strong className="text-amber-300">Renal Protocol Floor Violation:</strong> Observed CrCl is <strong>22.0 mL/min</strong> (&lt; 30 mL/min eligibility threshold, though eGFR 24 passes G2). Triggers RAG rule rejection.
+                </div>
+              )}
+              {selected.patient_id === "P047" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3.5 text-xs text-amber-200 leading-relaxed space-y-1">
+                  <strong className="text-amber-300">Active Autoimmune Exclusion:</strong> Active Crohn&apos;s disease on systemic corticosteroids strictly contraindicates checkpoint immunotherapy per trial protocol.
+                </div>
+              )}
               {selected.patient_id === "P037" && (
                 <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
                   <strong className="text-purple-300">Unanimous 4-Agent Rejection:</strong> Unapproved biologic escalation (400 mg Q3W), active Grade 3 colitis + Ketoconazole DDI, and <strong>$48,500</strong> uncovered patient liability.
+                </div>
+              )}
+              {selected.patient_id === "P048" && (
+                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
+                  <strong className="text-purple-300">A2A Safety Agent Rejection:</strong> Severe pharmacokinetic drug-drug interaction. Concomitant Ketoconazole + Clarithromycin causes &gt;300% Apixaban AUC elevation and fatal hemorrhage hazard.
+                </div>
+              )}
+              {selected.patient_id === "P049" && (
+                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
+                  <strong className="text-purple-300">A2A Financial Agent Denial:</strong> Off-label exploratory sarcoma cohort is not covered by sponsor trial billing agreement. Incurs <strong>$52,800</strong> in non-covered patient liability.
+                </div>
+              )}
+              {selected.patient_id === "P050" && (
+                <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-xs text-purple-200 leading-relaxed space-y-1">
+                  <strong className="text-purple-300">Multi-Agent Dissent (Safety &amp; Financial):</strong> Quadruple antithrombotic therapy (Apixaban + Aspirin + Clopidogrel + Ticagrelor) causes severe hemorrhage risk and <strong>$6,400</strong> billing dispute.
+                </div>
+              )}
+              {["P051", "P052", "P053", "P054"].includes(selected.patient_id) && (
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-200 leading-relaxed space-y-1">
+                  <strong className="text-emerald-300">✓ Fully Compliant Trial Candidate:</strong> All demographic attributes verified (G1), organ clearance corridors normal (G2), protocol dosing compliant (RAG), and all 4 specialist agents recommend approval with 100% sponsor trial coverage ($0 liability).
                 </div>
               )}
 
@@ -573,53 +670,183 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     </button>
                   )}
 
-                  {/* Dedicated 1-click test scenario presets */}
-                  <div className="w-full pt-1.5 flex flex-wrap gap-1.5 border-t border-[#252525] mt-1">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider self-center mr-1">Error Scenarios:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const pat = patients.find(p => p.patient_id === "P034")
-                        if (pat) choose(pat)
-                      }}
-                      className={`rounded border px-2 py-0.5 text-[11px] font-mono transition-colors ${
-                        disqualifiedIds.includes("P034")
-                          ? "border-rose-600 bg-rose-950/80 text-rose-200 hover:bg-rose-900/80"
-                          : "border-rose-800/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60"
-                      }`}
-                    >
-                      {disqualifiedIds.includes("P034") ? "P034: Locked Out (3/3)" : "P034: G1 Ingress Fail"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const pat = patients.find(p => p.patient_id === "P035")
-                        if (pat) choose(pat)
-                      }}
-                      className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
-                    >
-                      P035: G2 Boundary Breach
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const pat = patients.find(p => p.patient_id === "P036")
-                        if (pat) choose(pat)
-                      }}
-                      className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
-                    >
-                      P036: Protocol Non-Compliant
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const pat = patients.find(p => p.patient_id === "P037")
-                        if (pat) choose(pat)
-                      }}
-                      className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 transition-colors"
-                    >
-                      P037: 4 A2A Rejection
-                    </button>
+                  {/* Dedicated 1-click test scenario presets organized by failure & pass modes */}
+                  <div className="w-full pt-2 flex flex-col gap-2 border-t border-[#252525] mt-1">
+                    {/* G1 Category */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider min-w-28">G1 Ingress Fail:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P034"); if (pat) choose(pat); }}
+                        className={`rounded border px-2 py-0.5 text-[11px] font-mono transition-colors ${
+                          disqualifiedIds.includes("P034")
+                            ? "border-rose-600 bg-rose-950/80 text-rose-200"
+                            : "border-rose-800/60 bg-rose-950/40 text-rose-300 hover:bg-rose-900/60"
+                        }`}
+                      >
+                        {disqualifiedIds.includes("P034") ? "P034: Locked Out" : "P034 (Age+Sex)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P038"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P038 (Missing Sex)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P039"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P039 (Missing Age)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P040"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P040 (21 CFR 312.62)
+                      </button>
+                    </div>
+
+                    {/* G2 Category */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider min-w-28">G2 Boundary:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P035"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P035 (ALT 620 U/L)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P041"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P041 (eGFR 11 ESRD)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P042"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P042 (Bilirubin 6.8)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P043"); if (pat) choose(pat); }}
+                        className="rounded border border-rose-800/60 bg-rose-950/40 px-2 py-0.5 text-[11px] font-mono text-rose-300 hover:bg-rose-900/60 transition-colors"
+                      >
+                        P043 (ANC 320 Agranulocytosis)
+                      </button>
+                    </div>
+
+                    {/* RAG Rules Category */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider min-w-28">RAG Rules:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P036"); if (pat) choose(pat); }}
+                        className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        P036 (Overdose 40mg + Bleed)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P044"); if (pat) choose(pat); }}
+                        className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        P044 (Overdose 60mg BID)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P045"); if (pat) choose(pat); }}
+                        className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        P045 (Washout 8d &lt; 30d)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P046"); if (pat) choose(pat); }}
+                        className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        P046 (CrCl 22 &lt; 30 Floor)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P047"); if (pat) choose(pat); }}
+                        className="rounded border border-amber-800/60 bg-amber-950/40 px-2 py-0.5 text-[11px] font-mono text-amber-300 hover:bg-amber-900/60 transition-colors"
+                      >
+                        P047 (Autoimmune Exclusion)
+                      </button>
+                    </div>
+
+                    {/* A2A Discrepancies Category */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider min-w-28">4 A2A Rejection:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P037"); if (pat) choose(pat); }}
+                        className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 transition-colors"
+                      >
+                        P037 (4-Agent Dissent)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P048"); if (pat) choose(pat); }}
+                        className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 transition-colors"
+                      >
+                        P048 (DDI Safety Rejection)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P049"); if (pat) choose(pat); }}
+                        className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 transition-colors"
+                      >
+                        P049 (Financial $52.8k Denial)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P050"); if (pat) choose(pat); }}
+                        className="rounded border border-purple-800/60 bg-purple-950/40 px-2 py-0.5 text-[11px] font-mono text-purple-300 hover:bg-purple-900/60 transition-colors"
+                      >
+                        P050 (Triple Antiplatelet Dissent)
+                      </button>
+                    </div>
+
+                    {/* Clean Passes Category */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider min-w-28">Clean Passes:</span>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P051"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P051 (Atrial Fib Pass)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P052"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P052 (Oncology Pass)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P053"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P053 (MASH Pass)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { const pat = patients.find(p => p.patient_id === "P054"); if (pat) choose(pat); }}
+                        className="rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-0.5 text-[11px] font-mono text-emerald-300 hover:bg-emerald-900/60 transition-colors"
+                      >
+                        ✓ P054 (Renal SGLT2i Pass)
+                      </button>
+                    </div>
                   </div>
                 </div>
               )

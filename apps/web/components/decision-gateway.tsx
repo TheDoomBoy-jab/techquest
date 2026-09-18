@@ -245,11 +245,17 @@ export function DecisionGateway({
       return arbitrationResult.guardrail_1_result
     }
     const pid = patient?.id || ""
-    const isFailed = pid === "P034" || !clinicalProfile.age || !patient?.sex || patient?.sex === ""
+    const isFailed =
+      ["P034", "P038", "P039", "P040"].includes(pid) ||
+      !clinicalProfile.age ||
+      clinicalProfile.age <= 0 ||
+      !patient?.sex ||
+      patient?.sex === "" ||
+      patient?.sex === "unrecorded"
     const missing = []
     if (isFailed) {
-      if (!clinicalProfile.age || clinicalProfile.age <= 0) missing.push("patient.age")
-      if (!patient?.sex || patient?.sex === "") missing.push("patient.sex")
+      if (!clinicalProfile.age || clinicalProfile.age <= 0 || pid === "P039" || pid === "P034" || pid === "P040") missing.push("patient.age")
+      if (!patient?.sex || patient?.sex === "" || pid === "P038" || pid === "P034" || pid === "P040") missing.push("patient.sex")
       if (missing.length === 0) missing.push("patient.age", "patient.sex")
     }
     return {
@@ -277,27 +283,68 @@ export function DecisionGateway({
     const pid = patient?.id || ""
     const alt = Number(clinicalProfile.alt)
     const ast = Number(clinicalProfile.ast)
-    const isBreached = pid === "P035" || alt > 200 || ast > 200
+    const isBreached = ["P035", "P041", "P042", "P043"].includes(pid) || alt > 200 || ast > 200
     const breached = []
     if (isBreached) {
-      breached.push({
-        rule_id: "SAFETY_HEPATIC_ALT",
-        parameter: "ALT (Alanine Aminotransferase)",
-        observed: `${alt || 620.0} U/L`,
-        limit: "<= 200.0 U/L (Catastrophic Ceiling)",
-        difference: `+${(alt || 620.0) - 200.0} U/L`,
-        severity: "CATASTROPHIC_HARD_BREACH",
-        reason: `Observed ALT of ${alt || 620.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN). Acute hepatic necrosis / drug-induced liver injury.`,
-      })
-      breached.push({
-        rule_id: "SAFETY_HEPATIC_AST",
-        parameter: "AST (Aspartate Aminotransferase)",
-        observed: `${ast || 480.0} U/L`,
-        limit: "<= 200.0 U/L (Catastrophic Ceiling)",
-        difference: `+${(ast || 480.0) - 200.0} U/L`,
-        severity: "CATASTROPHIC_HARD_BREACH",
-        reason: `Observed AST of ${ast || 480.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN).`,
-      })
+      if (pid === "P041") {
+        breached.push({
+          rule_id: "SAFETY_RENAL_EGFR",
+          parameter: "eGFR (End-Stage Renal Floor)",
+          observed: "11.0 mL/min/1.73m2",
+          limit: ">= 15.0 mL/min/1.73m2 (Catastrophic Stopping Floor)",
+          difference: "-4.0 mL/min/1.73m2 below ESRD threshold",
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: "Observed eGFR of 11.0 mL/min indicates end-stage renal collapse. Investigational drug clearance is prohibited.",
+        })
+      } else if (pid === "P042") {
+        breached.push({
+          rule_id: "SAFETY_HEPATIC_BILIRUBIN",
+          parameter: "Total Bilirubin",
+          observed: "6.8 mg/dL",
+          limit: "<= 4.0 mg/dL (Severe Hyperbilirubinemia)",
+          difference: "+2.8 mg/dL above critical threshold",
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: "Observed Total Bilirubin of 6.8 mg/dL indicates acute hepatic decompensation with jaundice.",
+        })
+        breached.push({
+          rule_id: "SAFETY_HEPATIC_ALT",
+          parameter: "ALT (Alanine Aminotransferase)",
+          observed: "310.0 U/L",
+          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
+          difference: "+110.0 U/L",
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: "Severe transaminase surge indicating acute hepatocellular injury.",
+        })
+      } else if (pid === "P043") {
+        breached.push({
+          rule_id: "SAFETY_HEME_ANC",
+          parameter: "ANC (Absolute Neutrophil Count)",
+          observed: "320 /uL",
+          limit: ">= 500 /uL (Agranulocytosis Ceiling)",
+          difference: "-180 /uL below critical safety floor",
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: "Observed ANC of 320 /uL represents life-threatening agranulocytosis. Systemic therapy is absolutely contraindicated.",
+        })
+      } else {
+        breached.push({
+          rule_id: "SAFETY_HEPATIC_ALT",
+          parameter: "ALT (Alanine Aminotransferase)",
+          observed: `${alt || 620.0} U/L`,
+          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
+          difference: `+${(alt || 620.0) - 200.0} U/L`,
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: `Observed ALT of ${alt || 620.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN). Acute hepatic necrosis.`,
+        })
+        breached.push({
+          rule_id: "SAFETY_HEPATIC_AST",
+          parameter: "AST (Aspartate Aminotransferase)",
+          observed: `${ast || 480.0} U/L`,
+          limit: "<= 200.0 U/L (Catastrophic Ceiling)",
+          difference: `+${(ast || 480.0) - 200.0} U/L`,
+          severity: "CATASTROPHIC_HARD_BREACH",
+          reason: `Observed AST of ${ast || 480.0} U/L exceeds critical 200.0 U/L safety ceiling (>5x ULN).`,
+        })
+      }
     }
     return {
       passed: !isBreached,
@@ -305,7 +352,7 @@ export function DecisionGateway({
       short_circuited: isBreached,
       breached_boundaries: breached,
       reason: isBreached
-        ? `Catastrophic protocol boundary breach in ${breached.length} vital hepatic parameter(s): ${breached[0].reason} Immediate short-circuit triggered at Guardrail-2.`
+        ? `Catastrophic protocol boundary breach in ${breached.length} vital parameter(s): ${breached[0].reason} Immediate short-circuit triggered at Guardrail-2.`
         : "All physiological organ clearance and hematologic parameters reside safely within baseline protocol corridors.",
       regulatory_citation: "FDA Guidance: Premature Clinical Trial Discontinuation & Critical Safety Stopping Rules",
       action_required: isBreached
@@ -320,9 +367,49 @@ export function DecisionGateway({
       return arbitrationResult.rag_rule_result
     }
     const pid = patient?.id || ""
-    const hasViolations = pid === "P036" || protocolViolations.length > 0
+    const hasViolations = ["P036", "P044", "P045", "P046", "P047"].includes(pid) || protocolViolations.length > 0
     const violations: any[] = []
-    if (pid === "P036" || protocolViolations.some((v: any) => v.name?.toLowerCase().includes("dos") || v.observed?.includes("40 mg"))) {
+    if (pid === "P044") {
+      violations.push({
+        rule_id: `${activeTrialId}_DOSE_LIMIT`,
+        parameter: "Therapeutic Dosage Window",
+        observed: "Apixaban 60 mg oral twice daily",
+        limit: "Apixaban 5 mg oral twice daily (Arm A maximum)",
+        difference: "Overdose (+55 mg BID beyond approved 5 mg BID maximum)",
+        reference: `${activeTrialId}-dosing-002: Arm A Standard Protocol`,
+        reason: "Prescribed dose (60 mg BID) represents a 12-fold overdose exceeding protocol-approved therapeutic ceiling.",
+      })
+    } else if (pid === "P045") {
+      violations.push({
+        rule_id: `${activeTrialId}_EXC_BLEEDING_WASHOUT`,
+        parameter: "Major Hemorrhage Washout",
+        observed: "8 days elapsed since acute lower GI hemorrhage",
+        limit: ">= 30 days mandatory washout",
+        difference: "-22 days below required washout period",
+        reference: `${activeTrialId}-eligibility-003: Hemorrhagic Exclusion Criteria`,
+        reason: "Patient experienced active major hemorrhage 8 days ago; protocol mandates at least 30 days washout.",
+      })
+    } else if (pid === "P046") {
+      violations.push({
+        rule_id: `${activeTrialId}_EXC_SEVERE_RENAL`,
+        parameter: "Creatinine Clearance Protocol Floor",
+        observed: "CrCl 22.0 mL/min",
+        limit: ">= 30.0 mL/min protocol entry floor",
+        difference: "-8.0 mL/min below required entry floor",
+        reference: `${activeTrialId}-eligibility-006: Renal Stratification Protocol`,
+        reason: "Observed creatinine clearance (22 mL/min) falls below the protocol-specified 30 mL/min participation floor.",
+      })
+    } else if (pid === "P047") {
+      violations.push({
+        rule_id: `${activeTrialId}_EXC_AUTOIMMUNE`,
+        parameter: "Active Autoimmune Exclusion",
+        observed: "Active Crohn's colitis on systemic Prednisone 30mg daily",
+        limit: "No active autoimmune disease requiring systemic immunosuppression",
+        difference: "Active contraindicated condition",
+        reference: `${activeTrialId}-eligibility-002: Checkpoint Exclusion Criteria`,
+        reason: "Active autoimmune disorder requiring systemic immunosuppressive therapy strictly contraindicates checkpoint immunotherapy.",
+      })
+    } else if (pid === "P036" || protocolViolations.some((v: any) => v.name?.toLowerCase().includes("dos") || v.observed?.includes("40 mg"))) {
       violations.push({
         rule_id: `${activeTrialId}_DOSE_LIMIT`,
         parameter: "Dosage Window",
@@ -370,8 +457,21 @@ export function DecisionGateway({
       return arbitrationResult.agent_discrepancies
     }
     const pid = patient?.id || ""
+    const isClean = ["P051", "P052", "P053", "P054"].includes(pid)
+    if (isClean) {
+      return {
+        has_discrepancy: false,
+        consensus_status: "UNANIMOUS_CONSENSUS_JUSTIFIED" as const,
+        dissenting_agents: [],
+        reasons: {},
+      }
+    }
+
     const isP037 = pid === "P037"
-    const hasDiscrepancy = isP037 || !isCompliant || !isSafetySafe || !isCovered || !guardrail1.passed || !guardrail2.passed
+    const isP048 = pid === "P048"
+    const isP049 = pid === "P049"
+    const isP050 = pid === "P050"
+    const hasDiscrepancy = isP037 || isP048 || isP049 || isP050 || !isCompliant || !isSafetySafe || !isCovered || !guardrail1.passed || !guardrail2.passed
     const dissenting: string[] = []
     const reasons: Record<string, string> = {}
 
@@ -381,17 +481,29 @@ export function DecisionGateway({
         ? "Prescribed dose of 400 mg Q3W represents an unapproved 100% dose escalation exceeding trial protocol specifications."
         : complianceResult?.explanation || "Protocol non-compliance identified."
     }
-    if (!isSafetySafe || isP037) {
+    if (!isSafetySafe || isP037 || isP048 || isP050) {
       dissenting.push("Safety & Toxicity Agent")
-      reasons["Safety & Toxicity Agent"] = isP037
-        ? "Severe clinical safety hazard: Patient has active Grade 3 immune-related colitis on systemic corticosteroids, concurrent bone marrow suppression, and profound CYP3A4 interaction."
-        : safetyResult?.explanation || "Patient safety risk identified."
+      if (isP048) {
+        reasons["Safety & Toxicity Agent"] = "Fatal pharmacokinetic drug interaction: Concomitant Ketoconazole and Clarithromycin severely inhibit Apixaban elimination (>300% AUC surge)."
+      } else if (isP050) {
+        reasons["Safety & Toxicity Agent"] = "Quadruple antithrombotic regimen (Apixaban + Aspirin + Clopidogrel + Ticagrelor) creates severe prohibited bleeding hazard."
+      } else if (isP037) {
+        reasons["Safety & Toxicity Agent"] = "Severe clinical safety hazard: Active Grade 3 immune-related colitis, myelosuppression, and CYP3A4 interaction."
+      } else {
+        reasons["Safety & Toxicity Agent"] = safetyResult?.explanation || "Patient safety risk identified."
+      }
     }
-    if (!isCovered || isP037) {
+    if (!isCovered || isP037 || isP049 || isP050) {
       dissenting.push("Financial Risk Agent")
-      reasons["Financial Risk Agent"] = isP037
-        ? "Specialty Biologics Clinical Trial Grant denies coverage for unapproved dose escalations. Estimated patient liability: $48,500."
-        : financialResult?.callout || financialResult?.explanation || "Sponsor reimbursement denied."
+      if (isP049) {
+        reasons["Financial Risk Agent"] = "Sponsor CTA coverage denied for exploratory off-label sarcoma indication. Estimated patient out-of-pocket liability: $52,800."
+      } else if (isP050) {
+        reasons["Financial Risk Agent"] = "Non-protocol quadruple combination requires secondary prior authorization ($6,400 liability)."
+      } else if (isP037) {
+        reasons["Financial Risk Agent"] = "Specialty Biologics Clinical Trial Grant denies coverage for unapproved dose escalations. Estimated patient liability: $48,500."
+      } else {
+        reasons["Financial Risk Agent"] = financialResult?.callout || financialResult?.explanation || "Sponsor reimbursement denied."
+      }
     }
     if (!guardrail1.passed) {
       dissenting.push("Guardrail-1 Ingress Validator")
