@@ -699,12 +699,14 @@ export function OrchestrationGraph({
     const eventSource = new EventSource(streamUrl)
 
     let isDone = false
+    let cancelled = false
     const finish = () => {
-      if (isDone) return
+      if (isDone || cancelled) return
       isDone = true
       try { eventSource.close() } catch {}
       getArbitrationResult(patientId, activeDose || undefined)
         .then((arb) => {
+          if (cancelled || !arb) return
           if (arb?.prescribed_action) {
             setCurrentAction(arb.prescribed_action)
           }
@@ -758,7 +760,7 @@ export function OrchestrationGraph({
       console.warn("SSE stream closed or unavailable. Initiating dynamic fallback resolution.")
       getArbitrationResult(patientId, activeDose || undefined)
         .then((arb) => {
-          if (isDone) return
+          if (cancelled || isDone || !arb) return
           isDone = true
           clearTimeout(safetyTimer)
           try { eventSource.close() } catch {}
@@ -809,6 +811,7 @@ export function OrchestrationGraph({
     }
 
     return () => {
+      cancelled = true
       clearTimeout(safetyTimer)
       eventSource.close()
     }

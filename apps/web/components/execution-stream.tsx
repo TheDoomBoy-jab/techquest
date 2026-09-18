@@ -48,6 +48,7 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
     const baseUrl = getGatewayUrl()
     const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}`
     const eventSource = new EventSource(streamUrl)
+    let active = true
     eventSource.onopen = () => setConnectionState("open")
     eventSource.onmessage = (event) => {
       try {
@@ -63,7 +64,9 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
         }))
         if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") {
           getArbitrationResult(patientId, actionRef.current)
-            .then((result) => onCompleteRef.current?.(result))
+            .then((result) => {
+              if (active) onCompleteRef.current?.(result)
+            })
             .catch((error) => console.error("Failed to load completed arbitration result:", error))
           eventSource.close()
         }
@@ -120,6 +123,7 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
     }
 
     return () => {
+      active = false
       eventSource.close()
     }
   }, [patientId])
