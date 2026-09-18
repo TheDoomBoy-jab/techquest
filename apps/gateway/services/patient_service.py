@@ -113,6 +113,89 @@ def get_all_patients() -> List[Dict[str, Any]]:
     return list(cache.values())
 
 
+def reload_patient_cache() -> Dict[str, Dict[str, Any]]:
+    """Forces a refresh of the cached patients from disk."""
+    global _PATIENTS_CACHE
+    _PATIENTS_CACHE = None
+    return _load_cache()
+
+
+def update_patient_in_cache(
+    patient_id: str,
+    prescribed_action: str,
+    dosage: Optional[Any] = None,
+    dosage_unit: str = "mg",
+    route: str = "oral",
+    frequency: str = "twice daily",
+    timing_schedule: str = "Every 12 hours (08:00, 20:00)",
+    doctor_note: Optional[str] = None,
+) -> bool:
+    """Updates the patient profile in memory and persists to disk patients_expanded.json."""
+    from datetime import datetime, timezone
+    clean_id = patient_id.strip().upper()
+    cache = _load_cache()
+    target_record = cache.get(clean_id)
+    if not target_record:
+        for k, v in cache.items():
+            if clean_id in k or k in clean_id:
+                target_record = v
+                break
+    if not target_record:
+        return False
+
+    target_record["default_prescribed_action"] = prescribed_action
+    p = target_record.get("patient", target_record)
+    p["default_prescribed_action"] = prescribed_action
+
+    freq_abbr = "BID" if "twice" in frequency.lower() or "bid" in frequency.lower() else "daily"
+    words = prescribed_action.split()
+    drug_name = words[0] if words else "Medication"
+    dose_str = f"{dosage}{dosage_unit}" if dosage else ""
+    new_med_str = f"{drug_name} {dose_str} {freq_abbr}".strip()
+
+    meds = p.get("medications", [])
+    if isinstance(meds, list):
+        replaced = False
+        for i, m in enumerate(meds):
+            if drug_name.lower() in m.lower():
+                meds[i] = new_med_str
+                replaced = True
+                break
+        if not replaced:
+            meds.insert(0, new_med_str)
+        p["medications"] = meds
+
+    p["dosage_instructions"] = {
+        "dose": dosage,
+        "unit": dosage_unit,
+        "frequency": frequency,
+        "timing_schedule": timing_schedule,
+        "route": route,
+        "last_modified_timestamp": datetime.now(timezone.utc).isoformat(),
+        "clinical_rationale": doctor_note or "Clinician HITL modification",
+    }
+
+    # Persist to disk files
+    for path in CANDIDATE_PATHS:
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                for item in data.get("patients", []):
+                    item_p = item.get("patient", item)
+                    ipid = str(item.get("patient_id") or item_p.get("patient_id", "")).upper()
+                    if ipid == clean_id:
+                        item["default_prescribed_action"] = prescribed_action
+                        item_p["default_prescribed_action"] = prescribed_action
+                        item_p["medications"] = meds
+                        item_p["dosage_instructions"] = p["dosage_instructions"]
+                        break
+                path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception as exc:
+                logger.warning("Failed writing updated patient to %s: %s", path, exc)
+
+    return True
+
+
 def get_patient_profile(patient_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves a normalized patient record by patient ID (case-insensitive)."""
     if not patient_id:

@@ -8,6 +8,7 @@ import { getArbitrationResult, type ArbitrationResult } from "@/app/actions"
 type Props = {
   patientId: string
   action?: string
+  modificationCount?: number
   onComplete?: (result: ArbitrationResult) => void
 }
 type AgentResult = {
@@ -25,7 +26,7 @@ type AgentView = Pick<AgentCard, "name"> & Partial<Omit<AgentCard, "name">> & {
   financialExposure?: number
 }
 
-export function ExecutionStream({ patientId, action, onComplete }: Props) {
+export function ExecutionStream({ patientId, action, modificationCount = 0, onComplete }: Props) {
   const [agents, setAgents] = useState<AgentView[]>(() =>
     AGENTS.map(({ name }) => ({ name }))
   )
@@ -46,7 +47,8 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
     setConnectionState("connecting")
 
     const baseUrl = getGatewayUrl()
-    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}`
+    const activeAction = actionRef.current || action || ""
+    const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}${activeAction ? `&action=${encodeURIComponent(activeAction)}` : ""}`
     const eventSource = new EventSource(streamUrl)
     let active = true
     eventSource.onopen = () => setConnectionState("open")
@@ -63,9 +65,9 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
           return nextAgent
         }))
         if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") {
-          getArbitrationResult(patientId, actionRef.current)
+          getArbitrationResult(patientId, activeAction || undefined)
             .then((result) => {
-              if (active) onCompleteRef.current?.(result)
+              if (active && result) onCompleteRef.current?.(result)
             })
             .catch((error) => console.error("Failed to load completed arbitration result:", error))
           eventSource.close()
@@ -74,8 +76,9 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
     }
     eventSource.onerror = () => {
       try { eventSource.close() } catch {}
-      getArbitrationResult(patientId)
+      getArbitrationResult(patientId, activeAction || undefined)
         .then((arb) => {
+          if (!active) return
           setConnectionState("open")
           setAgents([
             {
@@ -137,7 +140,7 @@ export function ExecutionStream({ patientId, action, onComplete }: Props) {
           <p className="text-xs text-slate-400">4-stage agent audit pipeline</p>
         </div>
         <span className="rounded-full border border-[#2e2e2e] bg-[#121212] px-2.5 py-1 font-mono text-[11px] text-slate-300">
-          RUN #A2F9-14
+          RUN #A2F9-14 · MODIFICATION CYCLE {modificationCount}
         </span>
       </div>
 

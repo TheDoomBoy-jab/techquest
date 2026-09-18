@@ -23,7 +23,7 @@ except ImportError:
         generate_adjudication_pdf_bytes = None
 
 from services.client_agent import run as run_client_agent
-from services.patient_service import extract_patient_clinical_package, get_all_patients
+from services.patient_service import extract_patient_clinical_package, get_all_patients, update_patient_in_cache
 from services.supabase_reports import ReportPersistenceError, append_final_report, get_final_reports
 
 router = APIRouter()
@@ -226,13 +226,20 @@ async def _execute_run(
         await publish("Safety & Toxicity Agent", "processing")
         await publish("Financial Risk Agent", "processing")
         await publish("Client Agent", "processing", callout="Extracting prescribed action and dispatching specialist reviews.")
-        result = await run_client_agent(
-            rag_output,
-            modification=modification,
-            modifications=modifications,
-            report_history=report_history,
-            on_agent_complete=on_agent_complete,
-        )
+        try:
+            result = await asyncio.wait_for(
+                run_client_agent(
+                    rag_output,
+                    modification=modification,
+                    modifications=modifications,
+                    report_history=report_history,
+                    on_agent_complete=on_agent_complete,
+                ),
+                timeout=5.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("run_client_agent timed out for %s; synthesizing consensus immediately", patient_id)
+            raise TimeoutError("Multi-agent specialist review timed out; fallback active.")
         result["original_prescribed_action"] = rag_output.get(
             "original_prescribed_action", rag_output.get("prescribed_action", "")
         )
@@ -344,6 +351,9 @@ async def start_run(payload: dict) -> dict:
         return {"status": "already_running", "patientId": patient_id}
     rag_output = payload.get("rag_output") or payload.get("ragOutput") or payload
     normalized_rag_output = _simulated_rag_output(patient_id, rag_output)
+    if payload.get("prescribed_action"):
+        normalized_rag_output["prescribed_action"] = payload["prescribed_action"]
+        update_patient_in_cache(patient_id=patient_id, prescribed_action=payload["prescribed_action"])
     normalized_rag_output["original_prescribed_action"] = normalized_rag_output.get("prescribed_action", "")
     if "resupply_attempts" in payload:
         normalized_rag_output["resupply_attempts"] = payload["resupply_attempts"]
@@ -378,14 +388,26 @@ async def get_hitl_package(patient_id: str) -> dict:
 
 
 @router.get("/api/orchestrator/stream")
-async def stream_orchestrator(request: Request, patientId: str):
+async def stream_orchestrator(request: Request, patientId: str, action: Optional[str] = None):
+    # Check if a new run is required because action changed or patientId not started
+    if action and action.strip():
+        req_action = action.strip()
+        existing = runs.get(patientId)
+        if existing:
+            curr_action = existing.get("rag_output", {}).get("prescribed_action", "")
+            if curr_action and curr_action.strip() != req_action:
+                if patientId in run_tasks and not run_tasks[patientId].done():
+                    run_tasks[patientId].cancel()
+                runs.pop(patientId, None)
+                await start_run({"patientId": patientId, "prescribed_action": req_action})
+
     if patientId not in runs:
         for _ in range(40):
             if patientId in runs:
                 break
             await asyncio.sleep(0.05)
         if patientId not in runs:
-            await start_run({"patientId": patientId})
+            await start_run({"patientId": patientId, "prescribed_action": action})
     state = runs[patientId]
 
     async def generate():
@@ -422,6 +444,45 @@ async def get_arbitration_result(patient_id: str):
     return result
 
 
+@router.post("/api/fhir/update")
+async def fhir_update_patient(payload: dict):
+    patient_id = payload.get("patientId") or payload.get("patient_id")
+    if not patient_id:
+        raise HTTPException(status_code=400, detail="patientId is required")
+
+    action = payload.get("standardized_action") or payload.get("prescribed_action") or ""
+    dosage = payload.get("dosage")
+    dosage_unit = payload.get("dosage_unit", "mg")
+    route = payload.get("route", "oral")
+    frequency = payload.get("frequency", "twice daily")
+    timing_schedule = payload.get("timing_schedule", "Every 12 hours (08:00, 20:00)")
+    doctor_note = payload.get("doctor_note")
+
+    success = update_patient_in_cache(
+        patient_id=patient_id,
+        prescribed_action=action,
+        dosage=dosage,
+        dosage_unit=dosage_unit,
+        route=route,
+        frequency=frequency,
+        timing_schedule=timing_schedule,
+        doctor_note=doctor_note,
+    )
+
+    # Sync into memory runs and arbitration results if active
+    if patient_id in runs:
+        if "rag_output" in runs[patient_id] and runs[patient_id]["rag_output"]:
+            runs[patient_id]["rag_output"]["prescribed_action"] = action
+        if runs[patient_id].get("result"):
+            runs[patient_id]["result"]["prescribed_action"] = action
+    if patient_id in arbitration_results:
+        arbitration_results[patient_id]["prescribed_action"] = action
+    if patient_id in hitl_packages:
+        hitl_packages[patient_id]["prescribed_action"] = action
+
+    return {"status": "success", "patientId": patient_id, "updated": success, "prescribed_action": action}
+
+
 @router.post("/api/orchestrator/resume")
 async def resume_orchestrator(payload: dict):
     patient_id = payload.get("patientId")
@@ -432,12 +493,34 @@ async def resume_orchestrator(payload: dict):
         raise HTTPException(status_code=409, detail="No completed evaluation exists to modify")
     previous_result = previous_state["result"]
     rag_output = copy.deepcopy(previous_state["rag_output"])
-    rag_output["prescribed_action"] = previous_result.get("prescribed_action", rag_output.get("prescribed_action", ""))
+
+    # Extract newly modified prescribed action
+    modifications = payload.get("modifications") or []
+    ext = payload.get("extraction_details") or {}
+    new_action = payload.get("prescribed_action") or ext.get("standardized_action")
+    if not new_action and modifications:
+        m = modifications[0]
+        if m.get("dosage_name") and m.get("proposed_dosage"):
+            new_action = f"{m.get('dosage_name')} {m.get('proposed_dosage')} {m.get('dosage_unit', 'mg')} {m.get('route', 'oral')} {m.get('frequency', 'twice daily')}".strip()
+
+    if new_action:
+        rag_output["prescribed_action"] = new_action
+        update_patient_in_cache(
+            patient_id=patient_id,
+            prescribed_action=new_action,
+            dosage=ext.get("dosage") or (modifications[0].get("proposed_dosage") if modifications else None),
+            dosage_unit=ext.get("dosage_unit") or (modifications[0].get("dosage_unit", "mg") if modifications else "mg"),
+            route=ext.get("route") or (modifications[0].get("route", "oral") if modifications else "oral"),
+            frequency=ext.get("frequency") or (modifications[0].get("frequency", "twice daily") if modifications else "twice daily"),
+            doctor_note=payload.get("justification"),
+        )
+    else:
+        rag_output["prescribed_action"] = previous_result.get("prescribed_action", rag_output.get("prescribed_action", ""))
+
     rag_output["original_prescribed_action"] = previous_result.get(
         "original_prescribed_action", rag_output.get("original_prescribed_action", "")
     )
     rag_output["refinement_iteration_count"] = previous_result.get("iteration_count", 0) + 1
-    modifications = payload.get("modifications") or []
     report_history = previous_result.get("report_history", previous_state.get("report_history", []))
     runs[patient_id] = {
         "events": [],
@@ -453,7 +536,7 @@ async def resume_orchestrator(payload: dict):
         modifications=modifications,
         report_history=report_history,
     ))
-    return {"status": "success", "patientId": patient_id}
+    return {"status": "success", "patientId": patient_id, "prescribed_action": rag_output["prescribed_action"]}
  
  
 @router.post("/api/orchestrator/resupply")

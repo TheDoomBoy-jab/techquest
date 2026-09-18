@@ -1122,7 +1122,35 @@ export async function updateFhirDatabase(
     // ignore on platforms without node fs access
   }
 
-  // 4. Update Supabase if configured
+  // 4. Update FastAPI Gateway in-memory cache and persistence if reachable
+  try {
+    const baseUrl = getGatewayUrl()
+    if (baseUrl) {
+      const controller = new AbortController()
+      const t = setTimeout(() => controller.abort(), 3000)
+      await fetch(`${baseUrl}/api/fhir/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId,
+          standardized_action,
+          standardized_drug,
+          dosage,
+          dosage_unit,
+          route,
+          frequency,
+          timing_schedule,
+          doctor_note,
+        }),
+        signal: controller.signal,
+      })
+      clearTimeout(t)
+    }
+  } catch {
+    // transient network error; local and disk updates remain valid
+  }
+
+  // 5. Update Supabase if configured
   try {
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -1150,8 +1178,8 @@ export async function submitDecision(
   modifications?: any[],
   fullExtractionResult?: any
 ) {
+  let standardizedAction = ""
   if (decision === "override") {
-    let standardizedAction = ""
     if (fullExtractionResult?.standardized_action) {
       standardizedAction = fullExtractionResult.standardized_action
     } else if (Array.isArray(modifications) && modifications.length > 0) {
@@ -1182,6 +1210,7 @@ export async function submitDecision(
     justification: justification || null,
     modifications: modifications || [],
     extraction_details: fullExtractionResult || null,
+    prescribed_action: standardizedAction || undefined,
   }
 
   const baseUrl = getGatewayUrl()

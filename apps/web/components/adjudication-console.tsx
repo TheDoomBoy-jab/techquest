@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DecisionGateway } from "@/components/decision-gateway"
@@ -32,17 +32,23 @@ export function AdjudicationConsole({
 
   const [currentAction, setCurrentAction] = useState(action)
   const [streamKey, setStreamKey] = useState(0)
+  const [modificationCount, setModificationCount] = useState(0)
   const [arbitrationResult, setArbitrationResult] = useState<ArbitrationResult | null>(null)
   const [runStarted, setRunStarted] = useState(false)
+  const [isReEvaluating, setIsReEvaluating] = useState(false)
 
   useEffect(() => {
     setCurrentAction(action)
   }, [action])
 
+  const memoizedPatient = useMemo(
+    () => ({ ...patient, action: currentAction }),
+    [patient, currentAction]
+  )
+
   useEffect(() => {
     let cancelled = false
     setRunStarted(false)
-    setArbitrationResult(null)
 
     const baseUrl = getGatewayUrl()
     fetch(`${baseUrl}/api/orchestrator/runs`, {
@@ -76,28 +82,28 @@ export function AdjudicationConsole({
     return () => {
       cancelled = true
     }
-  }, [patient.id, currentAction, protocolId, streamKey])
+  }, [patient.id, protocolId, streamKey])
 
-  const handleRestartStream = (newAction?: string) => {
+  const handleRestartStream = useCallback((newAction?: string) => {
     if (newAction) {
+      setModificationCount((count) => count + 1)
       setCurrentAction(newAction)
       onUpdatePatient?.({ action: newAction })
     }
     setArbitrationResult(null)
+    setIsReEvaluating(true)
     setRunStarted(true)
-    setStreamKey(prev => prev + 1)
-  }
+    setStreamKey((prev) => prev + 1)
+  }, [onUpdatePatient])
 
-  const handleArbitrationComplete = (result: ArbitrationResult) => {
+  const handleArbitrationComplete = useCallback((result: ArbitrationResult) => {
     if (!result || (!result.final_verdict && !result.patientId && !result.patient_profile)) {
       return
     }
-    if (result?.prescribed_action && result.prescribed_action !== currentAction) {
-      setCurrentAction(result.prescribed_action)
-      onUpdatePatient?.({ action: result.prescribed_action })
-    }
+    setIsReEvaluating(false)
+    setRunStarted(true)
     setArbitrationResult(result)
-  }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
@@ -161,23 +167,38 @@ export function AdjudicationConsole({
         <OrchestrationGraph
           key={`orch-graph-${patient.id}`}
           patientId={patient.id}
-          patient={{ ...patient, action: currentAction }}
+          patient={memoizedPatient}
           action={currentAction}
           arbitrationResult={arbitrationResult}
           restartSignal={streamKey}
           onArbitrationComplete={handleArbitrationComplete}
         />
 
-        {!runStarted && !arbitrationResult && (
-          <div className="flex items-center justify-center gap-2 rounded-xl border border-[#2e2e2e] bg-[#1e1e1e] p-6 text-sm text-slate-400">
-            <Loader2 className="size-4 animate-spin text-[#3b82f6]" />
-            Starting multi-agent clinical evaluation pipeline...
+        {/* Re-evaluating or Starting State */}
+        {(!arbitrationResult || isReEvaluating) && (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-sky-500/30 bg-[#111C2D] p-8 text-center shadow-xl">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400">
+              <Loader2 className="size-6 animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">
+                {isReEvaluating ? "Re-Evaluating Multi-Agent Adjudication" : "Starting Multi-Agent Clinical Evaluation"}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-md">
+                {isReEvaluating
+                  ? `Synthesizing updated dosage (${currentAction}) across Protocol Compliance, Safety & Toxicity, Financial, and Consensus Reducer...`
+                  : `Connecting to multi-agent consensus pipeline for Patient ${patient.id} (${patient.name})...`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 font-mono text-[11px] text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full border border-sky-500/20">
+              <span>Active Target: {currentAction}</span>
+            </div>
           </div>
         )}
 
-        {arbitrationResult && (
+        {arbitrationResult && !isReEvaluating && (
           <DecisionGateway
-            patient={{ ...patient, action: currentAction }}
+            patient={memoizedPatient}
             arbitrationResult={arbitrationResult}
             onRestartStream={handleRestartStream}
             onPatientUpdated={(updated) => {
@@ -197,8 +218,9 @@ export function AdjudicationConsole({
         <ExecutionStream
           patientId={patient.id}
           action={currentAction}
+          modificationCount={modificationCount}
           key={streamKey}
-          onComplete={(result) => setArbitrationResult(result)}
+          onComplete={handleArbitrationComplete}
         />
       </main>
     </div>

@@ -104,9 +104,21 @@ TASK_PORTS: dict[str, list[str]] = {
 
 def _route_a2a_sync(payload: dict, request_id: int) -> dict:
     task_name = payload.get("agent-task", "")
-    target_urls = TASK_PORTS.get(task_name, [])
 
-    # 1. Attempt dispatch to dedicated A2A specialist microservice port
+    # 1. Prefer In-Process Local Execution (instant <10ms execution, zero network overhead)
+    try:
+        from a2a_server import route_task
+        res = route_task(payload)
+        if isinstance(res, dict):
+            if task_name == "financial" and not res.get("patientId"):
+                res["patientId"] = payload.get("patient_id")
+            return res
+    except Exception as in_process_err:
+        import logging
+        logging.getLogger(__name__).warning("In-process A2A fallback note for %s: %s", task_name, in_process_err)
+
+    # 2. Attempt dispatch to dedicated A2A specialist microservice port if available
+    target_urls = TASK_PORTS.get(task_name, [])
     if target_urls:
         # Strict HIPAA PHI sanitization for Financial Agent (Port 8003)
         if task_name == "financial":
@@ -131,7 +143,7 @@ def _route_a2a_sync(payload: dict, request_id: int) -> dict:
 
         for url in target_urls:
             try:
-                with httpx.Client(timeout=2.5) as client:
+                with httpx.Client(timeout=0.5) as client:
                     response = client.post(url, json=envelope)
                     if response.status_code == 200:
                         body = response.json()
@@ -153,14 +165,6 @@ def _route_a2a_sync(payload: dict, request_id: int) -> dict:
                                     return res_obj
             except Exception:
                 continue
-
-    # 2. Resilient In-Process Local Fallback (zero network overhead if microservice is offline)
-    try:
-        from a2a_server import route_task
-        return route_task(payload)
-    except Exception as in_process_err:
-        import logging
-        logging.getLogger(__name__).warning("In-process A2A fallback failed for %s: %s", task_name, in_process_err)
 
     # 3. Master Gateway Fallback URL
     message = {"role": "user", "parts": [{"text": json.dumps(payload)}], "messageId": f"client-{request_id}"}

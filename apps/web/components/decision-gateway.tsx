@@ -35,7 +35,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
-import { processClinicalComment, submitDecision, resupplyPatientData } from "@/app/actions"
+import { processClinicalComment, submitDecision, resupplyPatientData, updateFhirDatabase } from "@/app/actions"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
 import { getGatewayUrl } from "@/lib/api-config"
@@ -706,27 +706,74 @@ export function DecisionGateway({
   async function handleApplyRemediation() {
     setIsApplyingRemediation(true)
     setComment(remPrompt)
-    setModifyOpen(true)
-    setIsExtracting(true)
-    setTimeout(() => {
-      modifyDrawerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
-    }, 60)
 
     const standardized = remDose.includes("5 mg") ? "Apixaban 5 mg oral twice daily"
       : remDose.includes("200 mg") ? "Pembrolizumab 200 mg IV every 3 weeks"
       : remDose.includes("10 mg") ? "Empagliflozin 10 mg oral once daily"
       : "Pioglitazone 30 mg oral once daily"
+    const drugName = remDose.includes("5 mg") ? "Apixaban"
+      : remDose.includes("200 mg") ? "Pembrolizumab"
+      : remDose.includes("10 mg") ? "Empagliflozin"
+      : "Pioglitazone"
+    const dosageVal = remDose.includes("5 mg") ? 5
+      : remDose.includes("200 mg") ? 200
+      : remDose.includes("10 mg") ? 10
+      : 30
+    const routeVal = remDose.includes("200 mg") ? "intravenous" : "oral"
+    const freqVal = remDose.includes("5 mg") ? "twice daily"
+      : remDose.includes("200 mg") ? "every 3 weeks"
+      : "once daily"
+    const scheduleVal = remDose.includes("5 mg") ? "Every 12 hours (08:00, 20:00)"
+      : remDose.includes("200 mg") ? "Q3W Day 1"
+      : "Every morning (08:00)"
+
     setActiveAction(standardized)
     setOrderModified(true)
     setDecision("override")
 
     try {
-      const result = await processClinicalComment(remPrompt)
-      setExtractionResult(result)
+      await updateFhirDatabase(patient.id, {
+        standardized_action: standardized,
+        standardized_drug: drugName,
+        dosage: dosageVal,
+        dosage_unit: "mg",
+        route: routeVal,
+        frequency: freqVal,
+        timing_schedule: scheduleVal,
+        doctor_note: remPrompt,
+      })
+      await submitDecision(
+        patient.id,
+        "override",
+        remPrompt,
+        [{
+          dosage_name: drugName,
+          proposed_dosage: dosageVal,
+          dosage_unit: "mg",
+          route: routeVal,
+          frequency: freqVal,
+          timing_schedule: scheduleVal,
+          target_field: "MedicationRequest.dosageInstruction[0]",
+        }],
+        {
+          standardized_action: standardized,
+          standardized_drug: drugName,
+          dosage: dosageVal,
+          dosage_unit: "mg",
+          route: routeVal,
+          frequency: freqVal,
+          timing_schedule: scheduleVal,
+        }
+      )
+      setComment("")
+      setModifyOpen(false)
+      onPatientUpdated?.({ action: standardized })
+      onRestartStream?.(standardized)
     } catch (error) {
-      console.warn("NLP auto-extraction note (standardized dose applied):", error)
+      console.warn("Remediation execution warning (applying locally):", error)
+      onPatientUpdated?.({ action: standardized })
+      onRestartStream?.(standardized)
     } finally {
-      setIsExtracting(false)
       setIsApplyingRemediation(false)
     }
   }

@@ -3593,7 +3593,6 @@
       "cohort": "Cohort A - [G1 Ingress Failure] Missing Demographics",
       "demo_category": "SYNTHETIC_EHR_ERROR_G1",
       "name": "Elena Rostova",
-      "default_prescribed_action": "Apixaban 5 mg oral twice daily",
       "patient": {
         "patient_id": "P034",
         "name": "Elena Rostova",
