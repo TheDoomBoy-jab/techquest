@@ -30,6 +30,7 @@ export function AdjudicationConsole({
 }: Props) {
   const protocolId = protocol.split(" ")[0]
 
+  const [patientState, setPatientState] = useState<Patient>(patient)
   const [currentAction, setCurrentAction] = useState(action)
   const [streamKey, setStreamKey] = useState(0)
   const [modificationCount, setModificationCount] = useState(0)
@@ -38,12 +39,16 @@ export function AdjudicationConsole({
   const [isReEvaluating, setIsReEvaluating] = useState(false)
 
   useEffect(() => {
+    setPatientState(patient)
+  }, [patient])
+
+  useEffect(() => {
     setCurrentAction(action)
   }, [action])
 
   const memoizedPatient = useMemo(
-    () => ({ ...patient, action: currentAction }),
-    [patient, currentAction]
+    () => ({ ...patientState, action: currentAction }),
+    [patientState, currentAction]
   )
 
   useEffect(() => {
@@ -55,21 +60,21 @@ export function AdjudicationConsole({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        patientId: patient.id,
+        patientId: patientState.id,
         prescribed_action: currentAction,
         trial_id: protocolId,
         patient: {
-          id: patient.id,
-          patient_id: patient.id,
-          name: patient.name,
-          age: patient.age,
-          sex: patient.sex,
-          dob: patient.dob,
-          cohort: patient.cohort,
-          diagnosis: patient.diagnosis,
-          creatinine: patient.creatinine,
-          medications: patient.medications,
-          clinical_data: patient.clinical_data,
+          id: patientState.id,
+          patient_id: patientState.id,
+          name: patientState.name,
+          age: patientState.age,
+          sex: patientState.sex,
+          dob: patientState.dob,
+          cohort: patientState.cohort,
+          diagnosis: patientState.diagnosis,
+          creatinine: patientState.creatinine,
+          medications: patientState.medications,
+          clinical_data: patientState.clinical_data,
         },
       }),
     })
@@ -82,19 +87,27 @@ export function AdjudicationConsole({
     return () => {
       cancelled = true
     }
-  }, [patient.id, protocolId, streamKey])
+  }, [patientState.id, patientState.age, patientState.sex, protocolId, streamKey])
+
+  const handlePatientUpdated = useCallback((updated: Partial<Patient> & { action?: string }) => {
+    if (updated.action) {
+      setCurrentAction(updated.action)
+    }
+    setPatientState((prev) => ({ ...prev, ...updated }))
+    onUpdatePatient?.(updated)
+  }, [onUpdatePatient])
 
   const handleRestartStream = useCallback((newAction?: string) => {
     if (newAction) {
       setModificationCount((count) => count + 1)
       setCurrentAction(newAction)
-      onUpdatePatient?.({ action: newAction })
+      handlePatientUpdated({ action: newAction })
     }
     setArbitrationResult(null)
     setIsReEvaluating(true)
     setRunStarted(true)
     setStreamKey((prev) => prev + 1)
-  }, [onUpdatePatient])
+  }, [handlePatientUpdated])
 
   const handleArbitrationComplete = useCallback((result: ArbitrationResult) => {
     if (!result || (!result.final_verdict && !result.patientId && !result.patient_profile)) {
@@ -165,8 +178,8 @@ export function AdjudicationConsole({
       <main className="mx-auto max-w-7xl space-y-8 p-6 md:p-8">
         {/* Full-width Expansive React Flow Block */}
         <OrchestrationGraph
-          key={`orch-graph-${patient.id}`}
-          patientId={patient.id}
+          key={`orch-graph-${patientState.id}-${patientState.age || "un"}-${streamKey}`}
+          patientId={patientState.id}
           patient={memoizedPatient}
           action={currentAction}
           arbitrationResult={arbitrationResult}
@@ -187,7 +200,7 @@ export function AdjudicationConsole({
               <p className="text-xs text-slate-400 mt-1 max-w-md">
                 {isReEvaluating
                   ? `Synthesizing updated dosage (${currentAction}) across Protocol Compliance, Safety & Toxicity, Financial, and Consensus Reducer...`
-                  : `Connecting to multi-agent consensus pipeline for Patient ${patient.id} (${patient.name})...`}
+                  : `Connecting to multi-agent consensus pipeline for Patient ${patientState.id} (${patientState.name})...`}
               </p>
             </div>
             <div className="flex items-center gap-2 font-mono text-[11px] text-sky-400 bg-sky-500/10 px-3 py-1 rounded-full border border-sky-500/20">
@@ -201,12 +214,7 @@ export function AdjudicationConsole({
             patient={memoizedPatient}
             arbitrationResult={arbitrationResult}
             onRestartStream={handleRestartStream}
-            onPatientUpdated={(updated) => {
-              if (updated.action) {
-                setCurrentAction(updated.action)
-              }
-              onUpdatePatient?.(updated)
-            }}
+            onPatientUpdated={handlePatientUpdated}
             onPatientDisqualified={(id) => {
               onDisqualifyPatient?.(id)
               onBack()
@@ -216,7 +224,7 @@ export function AdjudicationConsole({
 
         {/* Detailed Chronological Execution Stream */}
         <ExecutionStream
-          patientId={patient.id}
+          patientId={patientState.id}
           action={currentAction}
           modificationCount={modificationCount}
           key={streamKey}

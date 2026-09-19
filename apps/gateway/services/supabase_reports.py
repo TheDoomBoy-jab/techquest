@@ -9,7 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-import httpx
+try:
+    import httpx
+except ImportError:
+    httpx = None
 
 logger = logging.getLogger(__name__)
 
@@ -195,3 +198,97 @@ def get_final_reports(patient_id: str) -> list[dict]:
             combined.append(r)
 
     return combined
+
+
+def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> bool:
+    """Synchronizes modified patient fields (age, sex, prescribed_action, clinical_data) to Supabase."""
+    url, key = _config()
+    if not url or not key:
+        logger.info("Supabase sync skipped for %s (credentials not configured)", patient_id)
+        return False
+
+    clean_id = patient_id.strip()
+    headers = _headers(key)
+    base = f"{url}/rest/v1/patients"
+
+    try:
+        cdata = {}
+        if httpx:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(
+                    base,
+                    params={"patient_id": f"eq.{clean_id}", "select": "patient_id,clinical_data"},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    rows = resp.json()
+                    if rows:
+                        cdata = rows[0].get("clinical_data") or {}
+        else:
+            import urllib.request
+            req_get = urllib.request.Request(
+                f"{base}?patient_id=eq.{clean_id}&select=patient_id,clinical_data",
+                headers=headers,
+                method="GET",
+            )
+            with urllib.request.urlopen(req_get, timeout=10) as resp:
+                if resp.status == 200:
+                    rows = json.loads(resp.read().decode("utf-8"))
+                    if rows:
+                        cdata = rows[0].get("clinical_data") or {}
+
+        # 2. Build patch payload
+        patch_payload: dict = {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if "age" in updates and updates["age"] is not None:
+            patch_payload["age"] = updates["age"]
+            cdata["age"] = updates["age"]
+        if "sex" in updates and updates["sex"]:
+            s = str(updates["sex"]).strip().lower()
+            norm_sex = "female" if s.startswith("f") else "male" if s.startswith("m") else s
+            patch_payload["sex"] = norm_sex
+            cdata["sex"] = norm_sex
+        if "prescribed_action" in updates and updates["prescribed_action"]:
+            patch_payload["prescribed_action"] = updates["prescribed_action"]
+            cdata["prescribed_action"] = updates["prescribed_action"]
+        if "medications" in updates and updates["medications"]:
+            cdata["medications"] = updates["medications"]
+        if "dosage_instructions" in updates and updates["dosage_instructions"]:
+            cdata["dosage_instructions"] = updates["dosage_instructions"]
+        if "clinical_data" in updates and isinstance(updates["clinical_data"], dict):
+            cdata.update(updates["clinical_data"])
+
+        patch_payload["clinical_data"] = cdata
+
+        # 3. Patch Supabase record
+        if httpx:
+            with httpx.Client(timeout=10) as client:
+                patch_resp = client.patch(
+                    base,
+                    params={"patient_id": f"eq.{clean_id}"},
+                    headers=headers,
+                    json=patch_payload,
+                )
+                if patch_resp.status_code in (200, 204):
+                    logger.info("Successfully synced patient %s updates to Supabase", clean_id)
+                    return True
+                else:
+                    logger.warning("Supabase patient update returned HTTP %s for %s: %s", patch_resp.status_code, clean_id, patch_resp.text)
+                    return False
+        else:
+            import urllib.request
+            req_patch = urllib.request.Request(
+                f"{base}?patient_id=eq.{clean_id}",
+                data=json.dumps(patch_payload).encode("utf-8"),
+                headers=headers,
+                method="PATCH",
+            )
+            with urllib.request.urlopen(req_patch, timeout=10) as resp:
+                if resp.status in (200, 204):
+                    logger.info("Successfully synced patient %s updates to Supabase", clean_id)
+                    return True
+                return False
+    except Exception as exc:
+        logger.warning("Failed syncing patient %s to Supabase: %s", clean_id, exc)
+        return False

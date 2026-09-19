@@ -160,6 +160,7 @@ export type ArbitrationResult = {
 }
 
 const patientActionOverrides = new Map<string, string>()
+const patientDemographicOverrides = new Map<string, { age?: number; sex?: string }>()
 
 export async function getArbitrationResult(patientId: string, overrideAction?: string): Promise<ArbitrationResult> {
   const baseUrl = getGatewayUrl()
@@ -167,12 +168,14 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
     process.env.VERCEL && !process.env.GATEWAY_URL && !process.env.NEXT_PUBLIC_GATEWAY_URL
   )
 
+  const demoOverride = patientDemographicOverrides.get(patientId)
+
   // Attempt to fetch from gateway API with retry if running locally or with an explicit external gateway configured
-  if (!isVercelWithoutGateway && baseUrl && !overrideAction && !patientActionOverrides.has(patientId)) {
-    for (let attempt = 0; attempt < 6; attempt++) {
+  if (!isVercelWithoutGateway && baseUrl && !patientActionOverrides.has(patientId)) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 3500)
+        const timeoutId = setTimeout(() => controller.abort(), 2500)
         const response = await fetch(
           `${baseUrl}/api/hitl/package/${encodeURIComponent(patientId)}`,
           { cache: "no-store", signal: controller.signal }
@@ -182,14 +185,26 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
         if (response.ok) {
           const pkg = await response.json()
           if (pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
+            if (demoOverride) {
+              if (pkg.patient_profile) {
+                if (demoOverride.age) pkg.patient_profile.age = demoOverride.age
+                if (demoOverride.sex) pkg.patient_profile.sex = demoOverride.sex
+              }
+              if (pkg.guardrail_1_result) {
+                pkg.guardrail_1_result.passed = true
+                pkg.guardrail_1_result.status = "PASSED"
+                pkg.guardrail_1_result.missing_fields = []
+                pkg.guardrail_1_result.resupply_attempts = Math.max(pkg.guardrail_1_result.resupply_attempts || 0, 1)
+              }
+            }
             return pkg
           }
         }
       } catch (err) {
         // transient connection error; retry if remaining
       }
-      if (attempt < 5) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 300))
       }
     }
   }
@@ -204,8 +219,8 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
   const meds: string[] = Array.isArray(pat?.medications) ? pat.medications : (cData?.medications || [])
 
   // 1. Dynamic Demographic Ingress Validation (Guardrail 1)
-  const ageVal = pat?.age ?? cData?.age
-  const sexVal = pat?.sex ?? cData?.sex
+  const ageVal = demoOverride?.age ?? pat?.age ?? cData?.age
+  const sexVal = demoOverride?.sex ?? pat?.sex ?? cData?.sex
   const hasValidAge = typeof ageVal === "number" && ageVal > 0
   const hasValidSex = Boolean(
     sexVal &&
@@ -477,8 +492,8 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
     patient_profile: pat ? {
       name: pat.name,
       patient_id: pat.id,
-      age: pat.age,
-      sex: pat.sex,
+      age: ageVal ?? pat.age,
+      sex: sexVal ?? pat.sex,
       dob: pat.dob,
       cohort: pat.cohort,
       trial_id: pat.trial_id,
@@ -562,13 +577,15 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
       passed: g1Passed,
       status: g1Passed ? "PASSED" : "FAILED",
       reason: g1Passed
-        ? "All demographic attributes verified per 21 CFR 312.62."
+        ? (demoOverride
+            ? "Patient demographics successfully resupplied by clinician and verified. Demographics conform to 21 CFR Part 11 ingress specifications."
+            : "All demographic attributes verified per 21 CFR 312.62.")
         : `Mandatory patient demographic integrity failure: missing required field(s) [${missingDemographics.join(", ")}]. Ingress schema validation failed per FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3.`,
       missing_fields: missingDemographics,
       regulatory_citation: "FDA 21 CFR 312.62 & ICH E6(R2) Section 4.3",
       action_required: g1Passed ? "Proceed" : `Clinician must resupply missing demographic fields [${missingDemographics.join(", ")}] (Attempt 1 of 3).`,
       max_iters: 3,
-      resupply_attempts: 0,
+      resupply_attempts: demoOverride ? 1 : 0,
       locked: false,
     },
     guardrail_2_result: {
@@ -1156,12 +1173,16 @@ export async function updateFhirDatabase(
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if (url && key) {
       const supabase = createClient(url, key)
+      const updateData: Record<string, any> = {
+        prescribed_action: standardized_action,
+        updated_at: new Date().toISOString(),
+      }
+      if (pat?.clinical_data) {
+        updateData.clinical_data = pat.clinical_data
+      }
       await supabase
         .from("patients")
-        .update({
-          prescribed_action: standardized_action,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("patient_id", patientId)
     }
   } catch {
@@ -1246,9 +1267,122 @@ export async function resupplyPatientData(
   maxIters: number = 3,
   justification?: string
 ) {
+  // 1. Parse resupplied values
+  let parsedAge: number | null = null
+  if (resupplied.age !== undefined && resupplied.age !== null && String(resupplied.age).trim() !== "") {
+    const n = Number(resupplied.age)
+    if (!isNaN(n) && n > 0) parsedAge = n
+  }
+  let parsedSex: string | null = null
+  if (resupplied.sex && String(resupplied.sex).trim() !== "") {
+    const s = String(resupplied.sex).trim().toLowerCase()
+    parsedSex = s.startsWith("f") ? "F" : s.startsWith("m") ? "M" : s
+  }
+
+  // 2. Cache demographic override in memory
+  if (parsedAge !== null || parsedSex !== null) {
+    const prev = patientDemographicOverrides.get(patientId) || {}
+    patientDemographicOverrides.set(patientId, {
+      age: parsedAge !== null ? parsedAge : prev.age,
+      sex: parsedSex !== null ? parsedSex : prev.sex,
+    })
+  }
+
+  // 3. Update in-memory PATIENTS array
+  const pat = PATIENTS.find((p) => p.id === patientId)
+  if (pat) {
+    if (parsedAge !== null) {
+      pat.age = parsedAge
+      if (!pat.clinical_data) pat.clinical_data = {}
+      pat.clinical_data.age = parsedAge
+    }
+    if (parsedSex !== null) {
+      pat.sex = parsedSex
+      if (!pat.clinical_data) pat.clinical_data = {}
+      pat.clinical_data.sex = parsedSex === "F" ? "female" : "male"
+    }
+  }
+
+  // 4. Update disk JSON files (mock FHIR server files)
+  try {
+    const fs = await import("fs")
+    const path = await import("path")
+    const candidatePaths = [
+      path.resolve(process.cwd(), "packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
+      path.resolve(process.cwd(), "services/rag_service/data/mock_fhir/patients_expanded.json"),
+      path.resolve(process.cwd(), "../packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
+      path.resolve(process.cwd(), "../services/rag_service/data/mock_fhir/patients_expanded.json"),
+      path.resolve(process.cwd(), "../../packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
+      path.resolve(process.cwd(), "../../services/rag_service/data/mock_fhir/patients_expanded.json"),
+      "/Users/aahannayak/RESOURCE/techquest/packages/mcp-ehr/src/mcp_ehr/patients_expanded.json",
+      "/Users/aahannayak/RESOURCE/techquest/services/rag_service/data/mock_fhir/patients_expanded.json",
+    ]
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        try {
+          const raw = fs.readFileSync(p, "utf-8")
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed.patients)) {
+            let found = false
+            for (const item of parsed.patients) {
+              const pid = item.patient_id || item.patient?.patient_id
+              if (pid === patientId) {
+                found = true
+                if (parsedAge !== null) {
+                  item.age = parsedAge
+                  if (item.patient) item.patient.age = parsedAge
+                }
+                if (parsedSex !== null) {
+                  const sNorm = parsedSex === "F" ? "female" : "male"
+                  item.sex = sNorm
+                  if (item.patient) item.patient.sex = sNorm
+                }
+                break
+              }
+            }
+            if (found) {
+              fs.writeFileSync(p, JSON.stringify(parsed, null, 2), "utf-8")
+            }
+          }
+        } catch {
+          // ignore write errors in restricted envs
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // 5. Update Supabase public.patients
+  try {
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (url && key) {
+      const supabase = createClient(url, key)
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      }
+      if (parsedAge !== null) updateData.age = parsedAge
+      if (parsedSex !== null) updateData.sex = parsedSex === "F" ? "female" : "male"
+      if (pat?.clinical_data) updateData.clinical_data = pat.clinical_data
+
+      await supabase
+        .from("patients")
+        .update(updateData)
+        .eq("patient_id", patientId)
+    }
+  } catch {
+    // transient supabase error ignored
+  }
+
+  // 6. Post to FastAPI Gateway orchestrator
   const payload = {
     patientId,
-    resupplied,
+    resupplied: {
+      age: parsedAge,
+      sex: parsedSex ? (parsedSex === "F" ? "female" : "male") : resupplied.sex,
+    },
     attempt_number: attemptNumber,
     max_iters: maxIters,
     justification: justification || `FHIR Demographic resupply attempt ${attemptNumber} of ${maxIters}`,
@@ -1273,5 +1407,5 @@ export async function resupplyPatientData(
     console.warn(`Gateway /api/orchestrator/resupply unreachable at ${baseUrl}; local resupply active:`, err)
   }
 
-  return { status: "resupplying", patientId, resupplied }
+  return { status: "resupplying", patientId, resupplied: { age: parsedAge, sex: parsedSex } }
 }

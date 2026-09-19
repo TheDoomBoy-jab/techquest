@@ -126,7 +126,12 @@ export function DecisionGateway({
   const [extractionResult, setExtractionResult] = useState<any>(null)
 
   useEffect(() => {
-    setLocalPatient(patient)
+    setLocalPatient((prev) => ({
+      ...prev,
+      ...patient,
+      age: (patient?.age !== undefined && patient?.age !== null && Number(patient.age) > 0) ? patient.age : prev?.age,
+      sex: (patient?.sex && patient.sex !== "unknown" && patient.sex !== "") ? patient.sex : prev?.sex,
+    }))
     if (patient?.age && patient.age > 0) setResupplyAge(String(patient.age))
     if (patient?.sex && patient.sex !== "unknown") {
       setResupplySex(patient.sex.toUpperCase() === "F" ? "Female" : patient.sex.toUpperCase() === "M" ? "Male" : patient.sex)

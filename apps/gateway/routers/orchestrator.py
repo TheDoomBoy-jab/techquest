@@ -23,7 +23,12 @@ except ImportError:
         generate_adjudication_pdf_bytes = None
 
 from services.client_agent import run as run_client_agent
-from services.patient_service import extract_patient_clinical_package, get_all_patients, update_patient_in_cache
+from services.patient_service import (
+    extract_patient_clinical_package,
+    get_all_patients,
+    update_patient_in_cache,
+    resupply_patient_demographics,
+)
 from services.supabase_reports import ReportPersistenceError, append_final_report, get_final_reports
 
 router = APIRouter()
@@ -354,6 +359,16 @@ async def start_run(payload: dict) -> dict:
     if payload.get("prescribed_action"):
         normalized_rag_output["prescribed_action"] = payload["prescribed_action"]
         update_patient_in_cache(patient_id=patient_id, prescribed_action=payload["prescribed_action"])
+
+    p_info = payload.get("patient") or {}
+    p_age = p_info.get("age")
+    p_sex = p_info.get("sex")
+    if p_age is not None and isinstance(p_age, (int, float)) and p_age > 0:
+        update_patient_in_cache(patient_id=patient_id, age=p_age, sex=p_sex if p_sex else None)
+        normalized_rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})["age"] = p_age
+        if p_sex:
+            normalized_rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})["sex"] = p_sex
+
     normalized_rag_output["original_prescribed_action"] = normalized_rag_output.get("prescribed_action", "")
     if "resupply_attempts" in payload:
         normalized_rag_output["resupply_attempts"] = payload["resupply_attempts"]
@@ -457,6 +472,8 @@ async def fhir_update_patient(payload: dict):
     frequency = payload.get("frequency", "twice daily")
     timing_schedule = payload.get("timing_schedule", "Every 12 hours (08:00, 20:00)")
     doctor_note = payload.get("doctor_note")
+    age = payload.get("age")
+    sex = payload.get("sex")
 
     success = update_patient_in_cache(
         patient_id=patient_id,
@@ -467,6 +484,8 @@ async def fhir_update_patient(payload: dict):
         frequency=frequency,
         timing_schedule=timing_schedule,
         doctor_note=doctor_note,
+        age=age,
+        sex=sex,
     )
 
     # Sync into memory runs and arbitration results if active
@@ -549,6 +568,22 @@ async def resupply_orchestrator(payload: dict):
     attempt_number = int(payload.get("attempt_number", 1))
     max_iters = int(payload.get("max_iters", 3))
 
+    parsed_age = None
+    if "age" in resupplied and resupplied["age"] is not None and str(resupplied["age"]).strip() != "":
+        try:
+            val = float(resupplied["age"])
+            parsed_age = int(val) if val.is_integer() else val
+        except (ValueError, TypeError):
+            parsed_age = resupplied["age"]
+
+    parsed_sex = None
+    if "sex" in resupplied and resupplied["sex"]:
+        s = str(resupplied["sex"]).strip().lower()
+        parsed_sex = "female" if s.startswith("f") else "male" if s.startswith("m") else s
+
+    # Persist resupplied demographics across memory cache, disk JSON, and Supabase
+    resupply_patient_demographics(patient_id=patient_id, age=parsed_age, sex=parsed_sex)
+
     previous_state = runs.get(patient_id)
     if previous_state and previous_state.get("rag_output"):
         rag_output = copy.deepcopy(previous_state["rag_output"])
@@ -558,16 +593,18 @@ async def resupply_orchestrator(payload: dict):
     rag_output["resupply_attempts"] = attempt_number
     rag_output["max_iters"] = max_iters
 
-    # Update patient clinical attributes in rule_analysis_package
+    # Update patient clinical attributes in rule_analysis_package and top-level patient
     patient_pkg = rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})
-    if "age" in resupplied and resupplied["age"] is not None and str(resupplied["age"]).strip() != "":
-        try:
-            val = float(resupplied["age"])
-            patient_pkg["age"] = int(val) if val.is_integer() else val
-        except (ValueError, TypeError):
-            patient_pkg["age"] = resupplied["age"]
-    if "sex" in resupplied and resupplied["sex"]:
-        patient_pkg["sex"] = str(resupplied["sex"]).strip().lower()
+    if parsed_age is not None:
+        patient_pkg["age"] = parsed_age
+    if parsed_sex is not None:
+        patient_pkg["sex"] = parsed_sex
+
+    top_p = rag_output.setdefault("patient", {})
+    if parsed_age is not None:
+        top_p["age"] = parsed_age
+    if parsed_sex is not None:
+        top_p["sex"] = parsed_sex
 
     if patient_id in run_tasks and not run_tasks[patient_id].done():
         run_tasks[patient_id].cancel()
@@ -593,6 +630,8 @@ async def resupply_orchestrator(payload: dict):
         "patientId": patient_id,
         "attempt_number": attempt_number,
         "max_iters": max_iters,
+        "age": parsed_age,
+        "sex": parsed_sex,
     }
 
 

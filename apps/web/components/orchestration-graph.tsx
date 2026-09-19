@@ -144,32 +144,53 @@ const GuardrailNode = React.memo(function GuardrailNode({ data }: NodeProps) {
   const d = data as {
     title: string
     subtitle: string
-    status: AgentStatus
+    status?: AgentStatus | "failed"
     ruleType: string
     passRule: string
     summary: string
     onInspect: () => void
+    isFailed?: boolean
   }
+
+  const isFailed = Boolean(d.isFailed || (d.status as string) === "failed")
 
   return (
     <div
       onClick={d.onInspect}
-      className="group relative w-64 cursor-pointer rounded-xl border border-emerald-500/30 bg-[#161616] p-3 shadow-xl backdrop-blur transition-all duration-150 hover:scale-[1.02] hover:border-emerald-400"
+      className={`group relative w-64 cursor-pointer rounded-xl border p-3 shadow-xl backdrop-blur transition-all duration-150 hover:scale-[1.02] ${
+        isFailed
+          ? "border-rose-500/60 bg-gradient-to-r from-rose-950/40 via-[#191410] to-[#121212] hover:border-rose-400"
+          : "border-emerald-500/30 bg-[#161616] hover:border-emerald-400"
+      }`}
     >
-      <Handle type="target" position={Position.Left} className="!size-2 !border !border-[#161616] !bg-emerald-400" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className={`!size-2 !border !border-[#161616] ${isFailed ? "!bg-rose-400" : "!bg-emerald-400"}`}
+      />
 
       <div className="flex items-center justify-between gap-2 border-b border-[#282828] pb-2">
         <div className="flex items-center gap-2">
-          <div className="flex size-6 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
-            <ShieldCheck className="size-3.5" />
+          <div
+            className={`flex size-6 items-center justify-center rounded-md ${
+              isFailed ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/15 text-emerald-400"
+            }`}
+          >
+            {isFailed ? <AlertTriangle className="size-3.5" /> : <ShieldCheck className="size-3.5" />}
           </div>
           <div>
             <p className="text-xs font-bold text-white leading-tight">{d.title}</p>
             <p className="text-[9px] text-slate-400 leading-tight">{d.subtitle}</p>
           </div>
         </div>
-        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400">
-          Passed
+        <span
+          className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
+            isFailed
+              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+              : "bg-emerald-500/15 text-emerald-400"
+          }`}
+        >
+          {isFailed ? "FAILED (RESUPPLY)" : "Passed"}
         </span>
       </div>
 
@@ -178,7 +199,13 @@ const GuardrailNode = React.memo(function GuardrailNode({ data }: NodeProps) {
           <span>TYPE</span>
           <span className="text-slate-300">{d.ruleType}</span>
         </div>
-        <div className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] text-emerald-300 truncate">
+        <div
+          className={`rounded border px-1.5 py-0.5 font-mono text-[9px] truncate ${
+            isFailed
+              ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+          }`}
+        >
           {d.passRule}
         </div>
         <p className="line-clamp-2 text-[10px] leading-relaxed text-slate-300">{d.summary}</p>
@@ -186,10 +213,16 @@ const GuardrailNode = React.memo(function GuardrailNode({ data }: NodeProps) {
 
       <div className="mt-2 flex items-center justify-between border-t border-[#242424] pt-1.5 text-[9px]">
         <span className="font-mono text-slate-500">&lt; 1ms Check</span>
-        <span className="text-emerald-400 font-medium group-hover:underline">Audit Rule →</span>
+        <span className={`${isFailed ? "text-rose-400" : "text-emerald-400"} font-medium group-hover:underline`}>
+          Audit Rule →
+        </span>
       </div>
 
-      <Handle type="source" position={Position.Right} className="!size-2 !border !border-[#161616] !bg-emerald-400" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className={`!size-2 !border !border-[#161616] ${isFailed ? "!bg-rose-400" : "!bg-emerald-400"}`}
+      />
     </div>
   )
 })
@@ -1110,6 +1143,17 @@ export function OrchestrationGraph({
       ]
     }
 
+    const hasG1Age = typeof patient?.age === "number" && patient.age > 0
+    const hasG1Sex = Boolean(
+      patient?.sex &&
+      patient.sex !== "" &&
+      patient.sex.toLowerCase() !== "unknown" &&
+      patient.sex.toLowerCase() !== "unrecorded"
+    )
+    const g1Passed = Boolean(
+      arbitrationResult?.guardrail_1_result?.passed ?? (hasG1Age && hasG1Sex)
+    )
+
     return [
       // Column 1: Ingress & Protocol Retrieval (x: 30)
       {
@@ -1193,17 +1237,24 @@ export function OrchestrationGraph({
         data: {
           title: "Guardrail 1: Schema",
           subtitle: "Type & Unit Validation",
-          status: "completed",
+          status: g1Passed ? "completed" : "failed",
+          isFailed: !g1Passed,
           ruleType: "Pydantic Schema Check",
-          passRule: "Units: mg, mL/min, mg/dL Verified",
-          summary: "Enforces strict Pydantic validation across clinical payloads (dose in mg, CrCl in mL/min, serum Cr in mg/dL).",
+          passRule: g1Passed
+            ? `Age ${patient?.age || 65}, Sex ${patient?.sex || "M"} Verified`
+            : "Missing: patient.age / patient.sex",
+          summary: g1Passed
+            ? "Enforces strict Pydantic validation across clinical payloads (dose in mg, CrCl in mL/min, serum Cr in mg/dL, demographics verified)."
+            : "Mandatory demographic fields missing. Ingress blocked under FDA 21 CFR 312.62 & ICH E6(R2).",
           onInspect: () =>
             setSelectedInspector({
               type: "guardrail",
               title: "Guardrail 1: Schema Integrity Verification",
               subtitle: "Deterministic Ingress Validation",
-              summary: "Verifies laboratory units (mL/min, mg/dL), dosing parameters (mg), and patient demographic ranges against TrialState schema.",
-              raw: { valid: true, schema: "TrialState.v1", status: "PASS", units_verified: ["mg", "mL/min", "mg/dL"] },
+              summary: g1Passed
+                ? "Verifies laboratory units (mL/min, mg/dL), dosing parameters (mg), and patient demographic ranges against TrialState schema."
+                : "Demographic validation failed: missing patient age or biological sex.",
+              raw: { valid: g1Passed, schema: "TrialState.v1", status: g1Passed ? "PASS" : "FAIL", age: patient?.age, sex: patient?.sex },
             }),
         },
       },
@@ -1510,6 +1561,17 @@ export function OrchestrationGraph({
 
   // Edges
   const edges: Edge[] = useMemo(() => {
+    const hasG1Age = typeof patient?.age === "number" && patient.age > 0
+    const hasG1Sex = Boolean(
+      patient?.sex &&
+      patient.sex !== "" &&
+      patient.sex.toLowerCase() !== "unknown" &&
+      patient.sex.toLowerCase() !== "unrecorded"
+    )
+    const g1Passed = Boolean(
+      arbitrationResult?.guardrail_1_result?.passed ?? (hasG1Age && hasG1Sex)
+    )
+
     const isProc = (s: AgentStatus) => s === "processing"
     const edgeStyle = (status: AgentStatus) => {
       if (status === "processing") return { stroke: "#3b82f6", strokeWidth: 2 }
@@ -1525,10 +1587,10 @@ export function OrchestrationGraph({
 
     return [
       // Ingress -> Guardrails
-      { id: "e-fhir-g1", source: "n-fhir", target: "n-g1", animated: false, style: { stroke: "#10b981", strokeWidth: 2 } },
+      { id: "e-fhir-g1", source: "n-fhir", target: "n-g1", animated: false, style: { stroke: g1Passed ? "#10b981" : "#f43f5e", strokeWidth: 2 } },
       { id: "e-rag-g2", source: "n-rag", target: "n-g2", animated: false, style: { stroke: "#10b981", strokeWidth: 2 } },
-      { id: "e-g1-g2", source: "n-g1", target: "n-g2", animated: false, style: { stroke: "#10b981", strokeWidth: 2 } },
-      { id: "e-g2-tc", source: "n-g2", target: "n-trial-check", animated: false, style: { stroke: "#10b981", strokeWidth: 2 } },
+      { id: "e-g1-g2", source: "n-g1", target: "n-g2", animated: false, style: { stroke: g1Passed ? "#10b981" : "#f43f5e", strokeWidth: 2 } },
+      { id: "e-g2-tc", source: "n-g2", target: "n-trial-check", animated: false, style: { stroke: isRenalPass ? "#10b981" : "#f43f5e", strokeWidth: 2 } },
 
       // Guardrails -> Master Dispatcher
       { id: "e-g2-master", source: "n-g2", target: "n-master", animated: false, style: { stroke: "#a855f7", strokeWidth: 2 } },
@@ -1557,7 +1619,7 @@ export function OrchestrationGraph({
           : { stroke: "#10b981", strokeWidth: 2 },
       },
     ]
-  }, [compliance.status, safety.status, financial.status, reducerState.status, reducerVerdict])
+  }, [compliance.status, safety.status, financial.status, reducerState.status, reducerVerdict, patient?.age, patient?.sex, arbitrationResult?.guardrail_1_result?.passed, isRenalPass])
 
   const handleCopyAudit = () => {
     if (!selectedInspector?.raw) return

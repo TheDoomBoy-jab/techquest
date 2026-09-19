@@ -15,7 +15,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "male",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy"
@@ -28,23 +28,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -64,18 +64,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "renal biopsy (2019)",
@@ -127,7 +127,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 65,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-valvular atrial fibrillation",
           "Coronary artery disease post-PCI",
@@ -143,23 +143,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 210000.0,
+            "value": 210000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -179,18 +179,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 78.0,
+          "heart_rate": 78,
           "blood_pressure_systolic": 128,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 420.0
+          "LVEF": 55,
+          "QTc": 420
         },
         "medical_history": [
           "PCI (percutaneous coronary intervention) 6 months ago",
@@ -242,7 +242,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 54,
         "sex": "female",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus",
@@ -259,23 +259,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 42.0,
+            "value": 42,
             "unit": "U/L"
           },
           "AST": {
-            "value": 38.0,
+            "value": 38,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 85.0,
+            "value": 85,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -283,7 +283,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -295,18 +295,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 80.0,
+            "value": 80,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 76.0,
+          "heart_rate": 76,
           "blood_pressure_systolic": 128,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "laparoscopic cholecystectomy (2018)",
@@ -358,7 +358,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "non-small cell lung cancer (stage IIIB)",
           "colorectal adenocarcinoma"
@@ -371,23 +371,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -403,22 +403,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Video-assisted thoracoscopic surgery (VATS) biopsy of lung lesion",
@@ -471,7 +471,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy"
@@ -484,23 +484,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -520,18 +520,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 50.0,
+            "value": 50,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 135,
           "blood_pressure_diastolic": 85
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "renal biopsy (2 years ago)",
@@ -584,7 +584,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 68,
         "sex": "male",
-        "weight": 80.0,
+        "weight": 80,
         "diagnoses": [
           "Non-valvular atrial fibrillation",
           "Coronary artery disease post-PCI",
@@ -600,23 +600,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -632,22 +632,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Percutaneous coronary intervention (PCI) with drug-eluting stent to left anterior descending artery 6 months ago",
@@ -698,7 +698,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 55,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Metabolic dysfunction-associated steatohepatitis (MASH)",
           "Type 2 diabetes mellitus"
@@ -713,23 +713,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 38.0,
+            "value": 38,
             "unit": "U/L"
           },
           "AST": {
-            "value": 34.0,
+            "value": 34,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -745,22 +745,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Cholecystectomy (12 years ago)",
@@ -812,7 +812,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-small cell lung cancer (stage IIIB)",
           "Colorectal adenocarcinoma"
@@ -825,23 +825,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 250000.0,
+            "value": 250000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -861,18 +861,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Laparoscopic right hemicolectomy for colorectal adenocarcinoma (2019)",
@@ -921,7 +921,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 64,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy"
@@ -934,23 +934,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 52.0,
+            "value": 52,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -970,18 +970,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "renal biopsy",
@@ -1034,7 +1034,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 65,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "non-valvular atrial fibrillation",
           "coronary artery disease post-PCI",
@@ -1048,23 +1048,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1080,22 +1080,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "percutaneous coronary intervention (PCI) 6 months ago",
@@ -1144,7 +1144,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 52,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus"
@@ -1157,23 +1157,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "AST": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1189,22 +1189,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "cholecystectomy",
@@ -1253,7 +1253,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 65.0,
+        "weight": 65,
         "diagnoses": [
           "non-small cell lung cancer (stage IIIB)",
           "colorectal adenocarcinoma"
@@ -1266,23 +1266,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1302,18 +1302,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 78.0,
+          "heart_rate": 78,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "Lobectomy (right lower lobe) 2 years ago",
@@ -1371,7 +1371,7 @@
         "sex": "female",
         "birth_date": "1961-07-22",
         "dob": "1961-07-22",
-        "weight": 66.0,
+        "weight": 66,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "essential hypertension"
@@ -1383,15 +1383,15 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 52.0,
+            "value": 52,
             "unit": "mL/min/1.73m2"
           },
           "total_bilirubin": {
@@ -1399,11 +1399,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4100.0,
+            "value": 4100,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 230000.0,
+            "value": 230000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1411,7 +1411,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "serum_creatinine": {
@@ -1419,18 +1419,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 70.0,
+          "heart_rate": 70,
           "blood_pressure_systolic": 122,
           "blood_pressure_diastolic": 78
         },
         "cardiac_function": {
-          "LVEF": 58.0,
-          "QTc": 410.0
+          "LVEF": 58,
+          "QTc": 410
         },
         "protocol_facts": {
           "oral_anticoagulation_required": false,
@@ -1453,7 +1453,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 65,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "non-valvular atrial fibrillation",
           "coronary artery disease post-PCI",
@@ -1467,23 +1467,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1499,22 +1499,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "PCI for LAD stent 6 months ago",
@@ -1563,7 +1563,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 52,
         "sex": "female",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus"
@@ -1576,23 +1576,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "AST": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 85.0,
+            "value": 85,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 250000.0,
+            "value": 250000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1608,22 +1608,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "laparoscopic cholecystectomy (2018)",
@@ -1675,7 +1675,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 52,
         "sex": "female",
-        "weight": 62.0,
+        "weight": 62,
         "diagnoses": [
           "Non-small cell lung cancer (stage IIIB)",
           "Colorectal adenocarcinoma"
@@ -1690,23 +1690,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 210000.0,
+            "value": 210000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1714,7 +1714,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -1726,18 +1726,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 78.0,
+          "heart_rate": 78,
           "blood_pressure_systolic": 125,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "Lobectomy for NSCLC (left upper lobe)",
@@ -1789,7 +1789,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy"
@@ -1802,27 +1802,27 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 52.0,
+            "value": 52,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 250000.0,
+            "value": 250000,
             "unit": "/uL"
           },
           "hemoglobin": {
-            "value": 12.0,
+            "value": 12,
             "unit": "g/dL"
           },
           "INR": {
@@ -1838,18 +1838,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 74.0,
+          "heart_rate": 74,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "renal biopsy",
@@ -1901,7 +1901,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 68,
         "sex": "female",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "Non-valvular atrial fibrillation",
           "Coronary artery disease status post-PCI",
@@ -1917,23 +1917,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -1953,18 +1953,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 60.0,
+            "value": 60,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 74.0,
+          "heart_rate": 74,
           "blood_pressure_systolic": 132,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 50.0,
-          "QTc": 430.0
+          "LVEF": 50,
+          "QTc": 430
         },
         "medical_history": [
           "Percutaneous coronary intervention (PCI) with drug-eluting stent to left anterior descending artery 7 days ago",
@@ -2017,7 +2017,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 52,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus"
@@ -2030,23 +2030,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 42.0,
+            "value": 42,
             "unit": "U/L"
           },
           "AST": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 70.0,
+            "value": 70,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4000.0,
+            "value": 4000,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2062,22 +2062,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "cholecystectomy (2018)",
@@ -2129,7 +2129,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-small cell lung cancer, stage IIIB",
           "Colorectal adenocarcinoma"
@@ -2142,23 +2142,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 82.0,
+            "value": 82,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 250000.0,
+            "value": 250000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2178,18 +2178,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 74.0,
+          "heart_rate": 74,
           "blood_pressure_systolic": 128,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Lobectomy left lower lobe",
@@ -2239,7 +2239,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "male",
-        "weight": 78.0,
+        "weight": 78,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy",
@@ -2254,23 +2254,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4000.0,
+            "value": 4000,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2290,18 +2290,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 70.0,
+            "value": 70,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 76.0,
+          "heart_rate": 76,
           "blood_pressure_systolic": 135,
           "blood_pressure_diastolic": 85
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "renal biopsy for membranous nephropathy",
@@ -2354,7 +2354,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 65,
         "sex": "female",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "non-valvular atrial fibrillation",
           "coronary artery disease status post-PCI",
@@ -2370,23 +2370,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2406,18 +2406,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 62.0,
+            "value": 62,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 68.0,
+          "heart_rate": 68,
           "blood_pressure_systolic": 118,
           "blood_pressure_diastolic": 76
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 420.0
+          "LVEF": 55,
+          "QTc": 420
         },
         "medical_history": [
           "Laparoscopic cholecystectomy (2018)",
@@ -2469,7 +2469,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 52,
         "sex": "female",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus"
@@ -2482,23 +2482,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "AST": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 80.0,
+            "value": 80,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4000.0,
+            "value": 4000,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2506,7 +2506,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -2518,18 +2518,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 76.0,
+          "heart_rate": 76,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "cholecystectomy (2018)",
@@ -2596,23 +2596,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 210000.0,
+            "value": 210000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2620,7 +2620,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -2632,18 +2632,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 62.0,
+            "value": 62,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 76.0,
+          "heart_rate": 76,
           "blood_pressure_systolic": 128,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Laparoscopic right hemicolectomy for colorectal adenocarcinoma (2 years ago)",
@@ -2695,7 +2695,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "Diabetic nephropathy stage 3a",
           "Membranous nephropathy",
@@ -2709,23 +2709,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2745,18 +2745,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Renal biopsy (left kidney) 2022",
@@ -2821,23 +2821,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 42.0,
+            "value": 42,
             "unit": "U/L"
           },
           "AST": {
-            "value": 36.0,
+            "value": 36,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2845,7 +2845,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -2857,18 +2857,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 74.0,
+          "heart_rate": 74,
           "blood_pressure_systolic": 128,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 60.0,
-          "QTc": 420.0
+          "LVEF": 60,
+          "QTc": 420
         },
         "medical_history": [
           "cholecystectomy (2019)",
@@ -2920,7 +2920,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-small cell lung cancer, stage IIIB",
           "Colorectal adenocarcinoma"
@@ -2933,23 +2933,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -2965,22 +2965,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Lobectomy for non-small cell lung cancer (left upper lobe) - 18 months ago",
@@ -3030,7 +3030,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 68,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "non-valvular atrial fibrillation",
           "coronary artery disease post-PCI",
@@ -3044,23 +3044,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3076,22 +3076,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "percutaneous coronary intervention with drug-eluting stent 7 days ago",
@@ -3142,7 +3142,7 @@
         "cohort": "Cohort B - NAFLD Protocol",
         "age": 52,
         "sex": "female",
-        "weight": 75.0,
+        "weight": 75,
         "diagnoses": [
           "metabolic dysfunction-associated steatohepatitis (MASH)",
           "type 2 diabetes mellitus"
@@ -3155,23 +3155,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "AST": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3187,22 +3187,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "laparoscopic cholecystectomy (2018)",
@@ -3256,7 +3256,7 @@
         "cohort": "Cohort B - Renal Stratification",
         "age": 62,
         "sex": "male",
-        "weight": 72.0,
+        "weight": 72,
         "diagnoses": [
           "diabetic nephropathy stage 3a",
           "membranous nephropathy"
@@ -3269,23 +3269,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3293,7 +3293,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -3305,18 +3305,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 76.0,
+          "heart_rate": 76,
           "blood_pressure_systolic": 134,
           "blood_pressure_diastolic": 82
         },
         "cardiac_function": {
-          "LVEF": 58.0,
-          "QTc": 420.0
+          "LVEF": 58,
+          "QTc": 420
         },
         "medical_history": [
           "kidney biopsy (membranous nephropathy) - 2 years ago",
@@ -3370,7 +3370,7 @@
         "cohort": "Cohort C - Solid Tumor Oncology",
         "age": 62,
         "sex": "female",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-small cell lung cancer (stage IIIB)",
           "Colorectal adenocarcinoma"
@@ -3385,23 +3385,23 @@
         ],
         "lab_results": {
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 70.0,
+            "value": 70,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3200.0,
+            "value": 3200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 200000.0,
+            "value": 200000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3409,7 +3409,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           },
           "total_bilirubin": {
@@ -3421,18 +3421,18 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 60.0,
+            "value": 60,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 78.0,
+          "heart_rate": 78,
           "blood_pressure_systolic": 130,
           "blood_pressure_diastolic": 85
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 420.0
+          "LVEF": 55,
+          "QTc": 420
         },
         "medical_history": [
           "Video-assisted thoracoscopic surgery (VATS) lung biopsy",
@@ -3487,7 +3487,7 @@
         "cohort": "Cohort A - Standard Protocol",
         "age": 65,
         "sex": "male",
-        "weight": 68.0,
+        "weight": 68,
         "diagnoses": [
           "Non-valvular atrial fibrillation",
           "Coronary artery disease (status post PCI)",
@@ -3501,23 +3501,23 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3533,22 +3533,22 @@
             "unit": "mg/dL"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 120,
           "blood_pressure_diastolic": 80
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 415.0
+          "LVEF": 55,
+          "QTc": 415
         },
         "medical_history": [
           "Percutaneous coronary intervention (PCI) - 2 months ago",
@@ -3598,10 +3598,10 @@
         "name": "Elena Rostova",
         "cohort": "Cohort A - [G1 Ingress Failure] Missing Demographics",
         "trial_id": "NCT02415400",
-        "age": null,
-        "sex": "",
+        "age": 58,
+        "sex": "male",
         "dob": "Unrecorded",
-        "weight": 62.0,
+        "weight": 62,
         "diagnoses": [
           "Non-valvular atrial fibrillation"
         ],
@@ -3612,27 +3612,27 @@
         "allergies": [],
         "lab_results": {
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "platelets": {
-            "value": 210000.0,
+            "value": 210000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3649,13 +3649,13 @@
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 122,
           "blood_pressure_diastolic": 78
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 420.0
+          "LVEF": 55,
+          "QTc": 420
         },
         "medical_history": [
           "Non-valvular atrial fibrillation diagnosed 2023"
@@ -3665,7 +3665,9 @@
           "oral_anticoagulation_required": true,
           "ongoing_bleeding": false
         }
-      }
+      },
+      "age": 58,
+      "sex": "male"
     },
     {
       "patient_id": "P035",
@@ -3682,7 +3684,7 @@
         "age": 52,
         "sex": "female",
         "dob": "1974-05-18",
-        "weight": 76.0,
+        "weight": 76,
         "diagnoses": [
           "MASH with bridging fibrosis",
           "Acute drug-induced hepatotoxicity"
@@ -3694,11 +3696,11 @@
         "allergies": [],
         "lab_results": {
           "ALT": {
-            "value": 620.0,
+            "value": 620,
             "unit": "U/L"
           },
           "AST": {
-            "value": 480.0,
+            "value": 480,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -3706,7 +3708,7 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -3714,11 +3716,11 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 62.0,
+            "value": 62,
             "unit": "mL/min/1.73m2"
           },
           "platelets": {
-            "value": 165000.0,
+            "value": 165000,
             "unit": "/uL"
           },
           "INR": {
@@ -3727,13 +3729,13 @@
           }
         },
         "vital_signs": {
-          "heart_rate": 84.0,
+          "heart_rate": 84,
           "blood_pressure_systolic": 134,
           "blood_pressure_diastolic": 86
         },
         "cardiac_function": {
-          "LVEF": 58.0,
-          "QTc": 435.0
+          "LVEF": 58,
+          "QTc": 435
         },
         "medical_history": [
           "NAFLD diagnosed 2020",
@@ -3760,7 +3762,7 @@
         "age": 68,
         "sex": "male",
         "dob": "1958-11-12",
-        "weight": 79.0,
+        "weight": 79,
         "diagnoses": [
           "Non-valvular atrial fibrillation"
         ],
@@ -3771,27 +3773,27 @@
         "allergies": [],
         "lab_results": {
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 26.0,
+            "value": 26,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "platelets": {
-            "value": 230000.0,
+            "value": 230000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -3807,18 +3809,18 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4100.0,
+            "value": 4100,
             "unit": "/uL"
           }
         },
         "vital_signs": {
-          "heart_rate": 72.0,
+          "heart_rate": 72,
           "blood_pressure_systolic": 124,
           "blood_pressure_diastolic": 78
         },
         "cardiac_function": {
-          "LVEF": 55.0,
-          "QTc": 420.0
+          "LVEF": 55,
+          "QTc": 420
         },
         "medical_history": [
           "Appendectomy 1995"
@@ -3847,7 +3849,7 @@
         "age": 61,
         "sex": "female",
         "dob": "1965-02-24",
-        "weight": 54.0,
+        "weight": 54,
         "diagnoses": [
           "Stage IV Non-Small Cell Lung Carcinoma",
           "Grade 3 Immune-Related Colitis"
@@ -3860,15 +3862,15 @@
         "allergies": [],
         "lab_results": {
           "ANC": {
-            "value": 1200.0,
+            "value": 1200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 85000.0,
+            "value": 85000,
             "unit": "/uL"
           },
           "creatinine_clearance": {
-            "value": 52.0,
+            "value": 52,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -3876,15 +3878,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 50.0,
+            "value": 50,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 75.0,
+            "value": 75,
             "unit": "U/L"
           },
           "AST": {
-            "value": 68.0,
+            "value": 68,
             "unit": "U/L"
           },
           "hemoglobin": {
@@ -3897,13 +3899,13 @@
           }
         },
         "vital_signs": {
-          "heart_rate": 82.0,
+          "heart_rate": 82,
           "blood_pressure_systolic": 116,
           "blood_pressure_diastolic": 72
         },
         "cardiac_function": {
-          "LVEF": 52.0,
-          "QTc": 445.0
+          "LVEF": 52,
+          "QTc": 445
         },
         "medical_history": [
           "Metastatic NSCLC",
@@ -3950,23 +3952,23 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -3974,11 +3976,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4100.0,
+            "value": 4100,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 230000.0,
+            "value": 230000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4030,7 +4032,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4038,15 +4040,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 60.0,
+            "value": 60,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 25.0,
+            "value": 25,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4054,11 +4056,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 250000.0,
+            "value": 250000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4066,7 +4068,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -4110,7 +4112,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 62.0,
+            "value": 62,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4118,15 +4120,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 26.0,
+            "value": 26,
             "unit": "U/L"
           },
           "AST": {
-            "value": 23.0,
+            "value": 23,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4134,11 +4136,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 3600.0,
+            "value": 3600,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 210000.0,
+            "value": 210000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4191,11 +4193,11 @@
         },
         "lab_results": {
           "eGFR": {
-            "value": 11.0,
+            "value": 11,
             "unit": "mL/min/1.73m2"
           },
           "creatinine_clearance": {
-            "value": 12.0,
+            "value": 12,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4203,11 +4205,11 @@
             "unit": "mg/dL"
           },
           "ALT": {
-            "value": 25.0,
+            "value": 25,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4215,11 +4217,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 180000.0,
+            "value": 180000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4277,15 +4279,15 @@
             "unit": "mg/dL"
           },
           "ALT": {
-            "value": 310.0,
+            "value": 310,
             "unit": "U/L"
           },
           "AST": {
-            "value": 285.0,
+            "value": 285,
             "unit": "U/L"
           },
           "creatinine_clearance": {
-            "value": 54.0,
+            "value": 54,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4293,15 +4295,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 56.0,
+            "value": 56,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 3500.0,
+            "value": 3500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 92000.0,
+            "value": 92000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4354,15 +4356,15 @@
         },
         "lab_results": {
           "ANC": {
-            "value": 320.0,
+            "value": 320,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 28000.0,
+            "value": 28000,
             "unit": "/uL"
           },
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4370,15 +4372,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 70.0,
+            "value": 70,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 32.0,
+            "value": 32,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4436,7 +4438,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 70.0,
+            "value": 70,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4444,15 +4446,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4460,11 +4462,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4517,7 +4519,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4525,27 +4527,27 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 64.0,
+            "value": 64,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 26.0,
+            "value": 26,
             "unit": "U/L"
           },
           "total_bilirubin": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4600.0,
+            "value": 4600,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 215000.0,
+            "value": 215000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4597,7 +4599,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 22.0,
+            "value": 22,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4605,15 +4607,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 24.0,
+            "value": 24,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "AST": {
-            "value": 20.0,
+            "value": 20,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4621,11 +4623,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 3900.0,
+            "value": 3900,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 195000.0,
+            "value": 195000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4633,7 +4635,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -4679,23 +4681,23 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 65.0,
+            "value": 65,
             "unit": "mL/min"
           },
           "serum_creatinine": {
-            "value": 1.0,
+            "value": 1,
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 26.0,
+            "value": 26,
             "unit": "U/L"
           },
           "AST": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4703,11 +4705,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 3900.0,
+            "value": 3900,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 230000.0,
+            "value": 230000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4715,7 +4717,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -4762,7 +4764,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 68.0,
+            "value": 68,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4770,15 +4772,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 74.0,
+            "value": 74,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 35.0,
+            "value": 35,
             "unit": "U/L"
           },
           "AST": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4786,11 +4788,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 220000.0,
+            "value": 220000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4842,7 +4844,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 72.0,
+            "value": 72,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4850,15 +4852,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 25.0,
+            "value": 25,
             "unit": "U/L"
           },
           "AST": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4866,11 +4868,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4500.0,
+            "value": 4500,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 260000.0,
+            "value": 260000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -4878,7 +4880,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -4927,7 +4929,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 52.0,
+            "value": 52,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -4935,15 +4937,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 55.0,
+            "value": 55,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 30.0,
+            "value": 30,
             "unit": "U/L"
           },
           "AST": {
-            "value": 28.0,
+            "value": 28,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -4951,11 +4953,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 3800.0,
+            "value": 3800,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 155000.0,
+            "value": 155000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -5008,7 +5010,7 @@
         },
         "lab_results": {
           "creatinine_clearance": {
-            "value": 74.0,
+            "value": 74,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -5016,15 +5018,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 22.0,
+            "value": 22,
             "unit": "U/L"
           },
           "AST": {
-            "value": 20.0,
+            "value": 20,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -5032,15 +5034,15 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4400.0,
+            "value": 4400,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 245000.0,
+            "value": 245000,
             "unit": "/uL"
           },
           "hemoglobin": {
-            "value": 14.0,
+            "value": 14,
             "unit": "g/dL"
           },
           "INR": {
@@ -5088,15 +5090,15 @@
         },
         "lab_results": {
           "ANC": {
-            "value": 4200.0,
+            "value": 4200,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 260000.0,
+            "value": 260000,
             "unit": "/uL"
           },
           "creatinine_clearance": {
-            "value": 75.0,
+            "value": 75,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -5104,15 +5106,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 80.0,
+            "value": 80,
             "unit": "mL/min/1.73m2"
           },
           "ALT": {
-            "value": 24.0,
+            "value": 24,
             "unit": "U/L"
           },
           "AST": {
-            "value": 21.0,
+            "value": 21,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -5124,7 +5126,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -5168,11 +5170,11 @@
         },
         "lab_results": {
           "ALT": {
-            "value": 34.0,
+            "value": 34,
             "unit": "U/L"
           },
           "AST": {
-            "value": 29.0,
+            "value": 29,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -5180,7 +5182,7 @@
             "unit": "mg/dL"
           },
           "creatinine_clearance": {
-            "value": 78.0,
+            "value": 78,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -5188,15 +5190,15 @@
             "unit": "mg/dL"
           },
           "eGFR": {
-            "value": 82.0,
+            "value": 82,
             "unit": "mL/min/1.73m2"
           },
           "ANC": {
-            "value": 4100.0,
+            "value": 4100,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 240000.0,
+            "value": 240000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -5204,7 +5206,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
@@ -5248,11 +5250,11 @@
         },
         "lab_results": {
           "eGFR": {
-            "value": 58.0,
+            "value": 58,
             "unit": "mL/min/1.73m2"
           },
           "creatinine_clearance": {
-            "value": 62.0,
+            "value": 62,
             "unit": "mL/min"
           },
           "serum_creatinine": {
@@ -5260,11 +5262,11 @@
             "unit": "mg/dL"
           },
           "ALT": {
-            "value": 23.0,
+            "value": 23,
             "unit": "U/L"
           },
           "AST": {
-            "value": 21.0,
+            "value": 21,
             "unit": "U/L"
           },
           "total_bilirubin": {
@@ -5272,11 +5274,11 @@
             "unit": "mg/dL"
           },
           "ANC": {
-            "value": 4300.0,
+            "value": 4300,
             "unit": "/uL"
           },
           "platelets": {
-            "value": 235000.0,
+            "value": 235000,
             "unit": "/uL"
           },
           "hemoglobin": {
@@ -5284,7 +5286,7 @@
             "unit": "g/dL"
           },
           "INR": {
-            "value": 1.0,
+            "value": 1,
             "unit": "ratio"
           }
         },
