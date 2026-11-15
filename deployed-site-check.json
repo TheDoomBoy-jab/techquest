@@ -1,0 +1,41 @@
+{
+  "website": "https://techquest-roan.vercel.app",
+  "method": "read-only HTTP checks of public synthetic presets; Safari UI control unavailable",
+  "cases": [
+    {
+      "demo_id": "P001",
+      "http_status": 404,
+      "elapsed_ms": 496.87
+    },
+    {
+      "demo_id": "P034",
+      "http_status": 404,
+      "elapsed_ms": 499.18
+    },
+    {
+      "demo_id": "P035",
+      "http_status": 404,
+      "elapsed_ms": 511.68
+    },
+    {
+      "demo_id": "P036",
+      "http_status": 404,
+      "elapsed_ms": 460.42
+    },
+    {
+      "demo_id": "P037",
+      "http_status": 404,
+      "elapsed_ms": 252.81
+    },
+    {
+      "demo_id": "P053",
+      "http_status": 404,
+      "elapsed_ms": 337.37
+    },
+    {
+      "demo_id": "NO_SUCH_DEMO_PATIENT",
+      "http_status": 404,
+      "elapsed_ms": 285.51
+    }
+  ]
+}

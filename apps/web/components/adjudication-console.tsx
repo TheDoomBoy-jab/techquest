@@ -87,7 +87,7 @@ export function AdjudicationConsole({
     return () => {
       cancelled = true
     }
-  }, [patientState.id, patientState.age, patientState.sex, protocolId, streamKey])
+  }, [patientState.id, patientState.age, patientState.sex, protocolId])
 
   const handlePatientUpdated = useCallback((updated: Partial<Patient> & { action?: string }) => {
     if (updated.action) {

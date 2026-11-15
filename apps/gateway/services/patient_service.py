@@ -140,11 +140,6 @@ def update_patient_in_cache(
     cache = _load_cache()
     target_record = cache.get(clean_id)
     if not target_record:
-        for k, v in cache.items():
-            if clean_id in k or k in clean_id:
-                target_record = v
-                break
-    if not target_record:
         return False
 
     p = target_record.get("patient", target_record)
@@ -169,11 +164,11 @@ def update_patient_in_cache(
         target_record["default_prescribed_action"] = prescribed_action
         p["default_prescribed_action"] = prescribed_action
 
-        freq_abbr = "BID" if "twice" in frequency.lower() or "bid" in frequency.lower() else "daily"
         words = prescribed_action.split()
         drug_name = words[0] if words else "Medication"
-        dose_str = f"{dosage}{dosage_unit}" if dosage else ""
-        new_med_str = f"{drug_name} {dose_str} {freq_abbr}".strip()
+        # Keep the same complete order in the medication list and evaluation input.
+        # Abbreviating every non-BID frequency to "daily" corrupted IV cycle orders.
+        new_med_str = prescribed_action
 
         if isinstance(meds, list):
             replaced = False

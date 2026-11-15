@@ -1,0 +1,44 @@
+{
+  "backend_discovered_in_deployed_browser_bundle": "https://techquest-z8iw.onrender.com",
+  "checks": [
+    {
+      "path": "/health",
+      "status": 200,
+      "elapsed_ms": 284.59,
+      "health": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "/api/patients",
+      "status": 200,
+      "elapsed_ms": 392.82,
+      "record_count": 54
+    },
+    {
+      "path": "/api/hitl/package/P001",
+      "status": 404,
+      "elapsed_ms": 360.79
+    },
+    {
+      "path": "/api/hitl/package/P034",
+      "status": 404,
+      "elapsed_ms": 246.21
+    },
+    {
+      "path": "/api/hitl/package/P035",
+      "status": 404,
+      "elapsed_ms": 262.3
+    },
+    {
+      "path": "/api/hitl/package/P036",
+      "status": 404,
+      "elapsed_ms": 264.84
+    },
+    {
+      "path": "/api/hitl/package/P037",
+      "status": 404,
+      "elapsed_ms": 244.5
+    }
+  ]
+}

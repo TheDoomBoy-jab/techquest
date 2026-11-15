@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import logging
+import math
 import time
 from collections import defaultdict
 
@@ -513,31 +514,42 @@ async def resume_orchestrator(payload: dict):
     previous_result = previous_state["result"]
     rag_output = copy.deepcopy(previous_state["rag_output"])
 
-    # Extract newly modified prescribed action
     modifications = payload.get("modifications") or []
     ext = payload.get("extraction_details") or {}
-    new_action = payload.get("prescribed_action") or ext.get("standardized_action")
-    if not new_action and modifications:
-        m = modifications[0]
-        if m.get("dosage_name") and m.get("proposed_dosage"):
-            new_action = f"{m.get('dosage_name')} {m.get('proposed_dosage')} {m.get('dosage_unit', 'mg')} {m.get('route', 'oral')} {m.get('frequency', 'twice daily')}".strip()
+    if ext.get("is_valid") is False or ext.get("is_appropriate") is False:
+        raise HTTPException(status_code=400, detail="Prescription extraction is invalid")
+    if len(modifications) > 1:
+        raise HTTPException(status_code=400, detail="Modify one prescription at a time")
+    mod = modifications[0] if modifications else {}
+    drug = ext.get("standardized_drug") or mod.get("dosage_name")
+    dose = ext.get("dosage") if ext.get("dosage") is not None else mod.get("proposed_dosage")
+    unit = ext.get("dosage_unit") or mod.get("dosage_unit")
+    route = ext.get("route") or mod.get("route")
+    frequency = ext.get("frequency") or mod.get("frequency")
+    try:
+        dose = float(dose)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="An explicit positive target dosage is required")
+    if not math.isfinite(dose) or dose <= 0 or not all(isinstance(v, str) and v.strip() for v in (drug, unit, route, frequency)):
+        raise HTTPException(status_code=400, detail="Drug, positive dose, units, route and frequency are required")
+    new_action = f"{drug.strip()} {dose:g} {unit.strip()} {route.strip()} {frequency.strip()}"
+    rag_output["prescribed_action"] = new_action
+    updated = update_patient_in_cache(
+        patient_id=patient_id, prescribed_action=new_action, dosage=dose,
+        dosage_unit=unit, route=route, frequency=frequency,
+        timing_schedule=ext.get("timing_schedule") or mod.get("timing_schedule") or "",
+        doctor_note=payload.get("justification"),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Patient could not be updated")
+    rag_output.setdefault("rule_analysis_package", {})["patient"] = extract_patient_clinical_package(patient_id)
+    # One canonical prescription is passed to every agent. Do not re-apply stale fields.
+    modifications = [{"dosage_name": drug, "proposed_dosage": dose, "dosage_unit": unit, "route": route, "frequency": frequency}]
 
-    if new_action:
-        rag_output["prescribed_action"] = new_action
-        update_patient_in_cache(
-            patient_id=patient_id,
-            prescribed_action=new_action,
-            dosage=ext.get("dosage") or (modifications[0].get("proposed_dosage") if modifications else None),
-            dosage_unit=ext.get("dosage_unit") or (modifications[0].get("dosage_unit", "mg") if modifications else "mg"),
-            route=ext.get("route") or (modifications[0].get("route", "oral") if modifications else "oral"),
-            frequency=ext.get("frequency") or (modifications[0].get("frequency", "twice daily") if modifications else "twice daily"),
-            doctor_note=payload.get("justification"),
-        )
-    else:
-        rag_output["prescribed_action"] = previous_result.get("prescribed_action", rag_output.get("prescribed_action", ""))
-
-    rag_output["original_prescribed_action"] = previous_result.get(
-        "original_prescribed_action", rag_output.get("original_prescribed_action", "")
+    rag_output["original_prescribed_action"] = (
+        previous_result.get("original_prescribed_action")
+        or rag_output.get("original_prescribed_action")
+        or previous_result.get("prescribed_action", "")
     )
     rag_output["refinement_iteration_count"] = previous_result.get("iteration_count", 0) + 1
     report_history = previous_result.get("report_history", previous_state.get("report_history", []))

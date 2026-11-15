@@ -31,6 +31,7 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
     AGENTS.map(({ name }) => ({ name }))
   )
   const [connectionState, setConnectionState] = useState<"connecting" | "open" | "error">("connecting")
+  const [retryCount, setRetryCount] = useState(0)
   const actionRef = useRef(action)
   const onCompleteRef = useRef(onComplete)
 
@@ -51,8 +52,9 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
     const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}${activeAction ? `&action=${encodeURIComponent(activeAction)}` : ""}`
     const eventSource = new EventSource(streamUrl)
     let active = true
-    eventSource.onopen = () => setConnectionState("open")
+    eventSource.onopen = () => { if (active) setConnectionState("open") }
     eventSource.onmessage = (event) => {
+      if (!active) return
       try {
         const updatedAgent = JSON.parse(event.data)
         setAgents((prevAgents) => prevAgents.map((agent) => {
@@ -69,67 +71,20 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
             .then((result) => {
               if (active && result) onCompleteRef.current?.(result)
             })
-            .catch((error) => console.error("Failed to load completed arbitration result:", error))
+            .catch(() => { if (active) setConnectionState("error") })
           eventSource.close()
         }
       } catch (error) { console.error("Failed to parse SSE data:", error) }
     }
     eventSource.onerror = () => {
-      try { eventSource.close() } catch {}
-      getArbitrationResult(patientId, activeAction || undefined)
-        .then((arb) => {
-          if (!active) return
-          setConnectionState("open")
-          setAgents([
-            {
-              name: "Protocol Compliance Agent",
-              status: "completed",
-              result: arb.protocol_compliance_result,
-              explanation: arb.protocol_compliance_result?.explanation,
-              callout: arb.protocol_compliance_result?.explanation,
-              latency: "340ms",
-              confidence: "98%",
-            },
-            {
-              name: "Safety & Toxicity Agent",
-              status: "completed",
-              result: arb.safety_result,
-              explanation: arb.safety_result?.explanation,
-              callout: arb.safety_result?.explanation,
-              latency: "410ms",
-              confidence: "95%",
-            },
-            {
-              name: "Financial Risk Agent",
-              status: "completed",
-              result: arb.financial_result,
-              explanation: arb.financial_result?.callout || arb.financial_result?.explanation,
-              callout: arb.financial_result?.callout || arb.financial_result?.explanation,
-              financialExposure: arb.financialExposure ?? arb.financial_result?.financialExposure ?? 0,
-              latency: "290ms",
-              confidence: "96%",
-            },
-            {
-              name: "Arbitration Reducer",
-              status: "completed",
-              final_verdict: arb.final_verdict,
-              explanation: arb.summary,
-              callout: arb.summary,
-              latency: "520ms",
-              confidence: "96%",
-            },
-          ])
-        })
-        .catch(() => {
-          setConnectionState("error")
-        })
+      eventSource.close()
+      if (active) setConnectionState("error")
     }
-
     return () => {
       active = false
       eventSource.close()
     }
-  }, [patientId])
+  }, [patientId, retryCount])
 
 
   return (
@@ -144,6 +99,14 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
         </span>
       </div>
 
+      {connectionState === "error" && (
+        <div role="alert" className="mb-4 flex items-center justify-between gap-3 text-xs text-rose-300">
+          <span>The latest evaluation could not be loaded.</span>
+          <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="underline">
+            Retry connection
+          </button>
+        </div>
+      )}
       <ol className="relative space-y-3">
         {agents.map((agent, i) => {
           const hasBackendState = Boolean(agent.status)

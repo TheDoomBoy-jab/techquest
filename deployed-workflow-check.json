@@ -1,0 +1,336 @@
+{
+  "backend": "https://techquest-z8iw.onrender.com",
+  "purpose": "normal evaluation flow of public synthetic scenarios; no accept/reject, resupply, or patient-update actions submitted",
+  "cases": [
+    {
+      "demo_id": "P001",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "JUSTIFIED",
+      "g1": "PASSED",
+      "g2": "PASSED",
+      "rag": "COMPLIANT",
+      "needs_review": false,
+      "report_history_count": 4,
+      "seconds": 4.87
+    },
+    {
+      "demo_id": "P034",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "NOT_JUSTIFIED",
+      "g1": "FAILED",
+      "g2": "PASSED",
+      "rag": "COMPLIANT",
+      "needs_review": true,
+      "report_history_count": 4,
+      "seconds": 2.79
+    },
+    {
+      "demo_id": "P035",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "NOT_JUSTIFIED",
+      "g1": "PASSED",
+      "g2": "BREACHED",
+      "rag": "COMPLIANT",
+      "needs_review": true,
+      "report_history_count": 4,
+      "seconds": 3.09
+    },
+    {
+      "demo_id": "P036",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "NOT_JUSTIFIED",
+      "g1": "PASSED",
+      "g2": "PASSED",
+      "rag": "NON_COMPLIANT",
+      "needs_review": true,
+      "report_history_count": 4,
+      "seconds": 4.33
+    },
+    {
+      "demo_id": "P037",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "NOT_JUSTIFIED",
+      "g1": "PASSED",
+      "g2": "PASSED",
+      "rag": "NON_COMPLIANT",
+      "needs_review": true,
+      "report_history_count": 4,
+      "seconds": 2.82
+    },
+    {
+      "demo_id": "P053",
+      "start_status": 200,
+      "stream_status": 200,
+      "events": [
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Client Agent",
+          "status": "processing"
+        },
+        {
+          "name": "Protocol Compliance Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Financial Risk Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Safety & Toxicity Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Client Agent",
+          "status": "completed"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "processing"
+        },
+        {
+          "name": "Arbitration Reducer",
+          "status": "completed"
+        }
+      ],
+      "package_status": 200,
+      "final_verdict": "JUSTIFIED",
+      "g1": "PASSED",
+      "g2": "PASSED",
+      "rag": "COMPLIANT",
+      "needs_review": false,
+      "report_history_count": 4,
+      "seconds": 2.98
+    }
+  ]
+}

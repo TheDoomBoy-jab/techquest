@@ -1,5 +1,6 @@
 import os
 import re
+import math
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -72,6 +73,16 @@ FORMULARY_SYNONYMS = {
 }
 
 
+def _target_dose(comment: str):
+    quantity = r"(?<![\w.-])(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b(?!\s*\/)"
+    target = re.search(r"\b(?:to|at)\s*" + quantity, comment, re.I)
+    quantities = list(re.finditer(quantity, comment, re.I))
+    match = target or (quantities[0] if len(quantities) == 1 else None)
+    if not match or not math.isfinite(float(match.group(1))) or float(match.group(1)) <= 0:
+        return None
+    return float(match.group(1)), match.group(2).lower()
+
+
 def _fallback_extract(comment: str) -> dict:
     text = (comment or "").strip()
     lower = text.lower()
@@ -85,7 +96,7 @@ def _fallback_extract(comment: str) -> dict:
             "modifications": [],
         }
 
-    conversational = ["hello", "hi there", "weather", "lunch", "sunny", "good day", "test", "asdf"]
+    conversational = ["hello", "hi there", "weather", "lunch", "sunny", "good day", "asdf"]
     if any(c in lower for c in conversational):
         return {
             "is_valid": False,
@@ -106,8 +117,8 @@ def _fallback_extract(comment: str) -> dict:
         if matched_entry:
             break
 
-    dose_match = re.search(r"(\d+(?:\.\d+)?)\s*(mg|mcg|g)\b", lower)
-    if not dose_match and re.search(r"\b(lower|increase|reduce|adjust)\b", lower):
+    target = _target_dose(text)
+    if not target and re.search(r"\b(lower|increase|reduce|adjust)\b", lower):
         drug_name = matched_entry["canonical"] if matched_entry else "the medication"
         return {
             "is_valid": False,
@@ -117,7 +128,7 @@ def _fallback_extract(comment: str) -> dict:
             "modifications": [],
         }
 
-    if not matched_entry and not dose_match:
+    if not matched_entry or not target:
         return {
             "is_valid": False,
             "is_appropriate": False,
@@ -126,12 +137,11 @@ def _fallback_extract(comment: str) -> dict:
             "modifications": [],
         }
 
-    entry = matched_entry or FORMULARY_SYNONYMS["apixaban"]
+    entry = matched_entry
     canonical = entry["canonical"]
     spelling_corrected = bool(matched_orig and matched_orig.lower() != canonical.lower())
 
-    dose_val = float(dose_match.group(1)) if dose_match else entry["default_dose"]
-    unit_val = dose_match.group(2).lower() if dose_match else entry["default_unit"]
+    dose_val, unit_val = target
 
     freq = entry["default_freq"]
     timing = entry["default_timing"]
@@ -148,7 +158,7 @@ def _fallback_extract(comment: str) -> dict:
         timing = "Day 1 of 21-day cycle (09:00)"
         route = "IV"
 
-    if any(k in lower for k in ["iv", "intravenous"]):
+    if re.search(r"\b(?:iv|intravenous)\b", lower):
         route = "IV"
     elif any(k in lower for k in ["oral", "po"]):
         route = "oral"
@@ -216,13 +226,23 @@ async def extract_comment(request: CommentRequest):
                 "1. Is it clinically appropriate with an identifiable drug and numerical dosage? "
                 "(Allow spelling errors or brand names like apixiban, eliquis, pembro, keytruda).\n"
                 "2. If inappropriate or vague without numbers, set is_appropriate=False, is_valid=False, and provide a clear clinical warning.\n"
-                "3. If appropriate, extract standardized_drug, dosage, dosage_unit, route, frequency, timing_schedule, standardized_action, target_fhir_field, and modifications list."
+                "3. If appropriate, extract standardized_drug, dosage, dosage_unit, route, frequency, timing_schedule, standardized_action, target_fhir_field, and modifications list. "
+                "For a change from X to Y, extract Y as the target dose. Never invent a dose or units."
             )
             result = structured.invoke(prompt)
             if result and hasattr(result, "model_dump"):
                 dumped = result.model_dump()
-                if dumped.get("is_valid") or dumped.get("is_appropriate") is False:
+                if dumped.get("is_appropriate") is False:
                     return dumped
+                target = _target_dose(request.comment)
+                mods = dumped.get("modifications", [])
+                if dumped.get("is_valid") and target and len(mods) == 1:
+                    mod = mods[0]
+                    if (mod.get("proposed_dosage"), str(mod.get("dosage_unit", "")).lower()) == target:
+                        # The canonical action must agree with the structured target.
+                        dumped["standardized_drug"] = mod["dosage_name"]
+                        dumped["standardized_action"] = f"{mod['dosage_name']} {target[0]:g} {mod['dosage_unit']} {mod['route']} {mod['frequency']}"
+                        return dumped
         except Exception:
             pass
 

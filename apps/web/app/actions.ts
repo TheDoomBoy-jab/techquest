@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { getGatewayUrl } from "@/lib/api-config"
+import { targetDose, matchesTargetDose, postDecision } from "@/lib/prescription"
 import { PATIENTS } from "@/lib/clinical-data"
 
 export async function getPatientsFromSupabase() {
@@ -171,7 +172,7 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
   const demoOverride = patientDemographicOverrides.get(patientId)
 
   // Attempt to fetch from gateway API with retry if running locally or with an explicit external gateway configured
-  if (!isVercelWithoutGateway && baseUrl && !patientActionOverrides.has(patientId)) {
+  if (!isVercelWithoutGateway && baseUrl) {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const controller = new AbortController()
@@ -184,7 +185,9 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
 
         if (response.ok) {
           const pkg = await response.json()
-          if (pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
+          const matchesRequestedAction = !overrideAction ||
+            String(pkg?.prescribed_action || "").trim().toLowerCase() === overrideAction.trim().toLowerCase()
+          if (matchesRequestedAction && pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
             if (demoOverride) {
               if (pkg.patient_profile) {
                 if (demoOverride.age) pkg.patient_profile.age = demoOverride.age
@@ -207,6 +210,10 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
         await new Promise((resolve) => setTimeout(resolve, 300))
       }
     }
+  }
+
+  if (overrideAction && !isVercelWithoutGateway && baseUrl) {
+    throw new Error("The updated prescription has not completed evaluation. Please retry.")
   }
 
   // Dynamic Clinical Evaluation (evaluates real patient telemetry and EHR data without hardcoded patient IDs)
@@ -784,16 +791,17 @@ export async function processClinicalComment(comment: string): Promise<ClinicalE
 
     if (response.ok) {
       const data = await response.json()
-      if (data && typeof data.is_appropriate === "boolean") {
+      if (data && (data.is_valid === false || data.is_appropriate === false)) {
         return data as ClinicalExtractionResult
       }
-      if (data && data.is_valid && Array.isArray(data.modifications) && data.modifications.length > 0) {
+      if (data?.is_valid && matchesTargetDose(trimmed, data)) {
         const first = data.modifications[0]
-        const drug = first.dosage_name || "Apixaban"
-        const dose = Number(first.proposed_dosage) || 5
-        const unit = first.dosage_unit || "mg"
-        const route = first.route || (drug === "Pembrolizumab" ? "IV" : "oral")
-        const freq = first.frequency || (drug === "Pembrolizumab" ? "every 3 weeks" : "twice daily")
+        const drug = first.dosage_name
+        const dose = Number(first.proposed_dosage)
+        const unit = first.dosage_unit
+        const route = first.route
+        const freq = first.frequency
+        if (!drug || !route || !freq) throw new Error("Incomplete remote prescription")
         const timing = freq.includes("twice") ? "Every 12 hours (08:00, 20:00)" : "Every 24 hours (08:00)"
         const action = `${drug} ${dose} ${unit} ${route} ${freq}`
         return {
@@ -890,35 +898,13 @@ export async function processClinicalComment(comment: string): Promise<ClinicalE
     }
   }
 
-  // Extract numerical dosage
-  const doseRegex = /(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b/i
-  const doseMatch = lower.match(doseRegex)
-
-  let doseNum: number = 5
-  let unitStr: string = "mg"
-  if (doseMatch) {
-    doseNum = parseFloat(doseMatch[1])
-    unitStr = doseMatch[2].toLowerCase()
-  } else {
-    // Check for standalone numbers (e.g., "5 bid" or "adjust to 5")
-    const numMatch = lower.match(/\b(\d+(?:\.\d+)?)\b/)
-    if (numMatch && matchedKey) {
-      doseNum = parseFloat(numMatch[1])
-      unitStr = FORMULARY_REGISTRY[matchedKey].defaultUnit
-    } else if (!matchedKey) {
-      return {
-        is_valid: false,
-        is_appropriate: false,
-        warning:
-          "Clinical Warning: Unrecognized prescription directive. Please include both an identifiable medication name and quantitative numerical dosage (e.g., 'Apixaban 5 mg oral twice daily').",
-        reasoning: "Neither a formulary medication nor a validated numerical dosage unit could be extracted.",
-        modifications: [],
-      }
-    }
+  const quantity = targetDose(trimmed)
+  if (!quantity || !matchedKey) {
+    return { is_valid: false, is_appropriate: false, warning: "Specify one identifiable medication and an explicit positive target dose with units.", reasoning: "Missing or ambiguous target prescription.", modifications: [] }
   }
-
-  // Fallback to Apixaban if no drug matched but dosage is provided in trial context
-  const entry = matchedKey ? FORMULARY_REGISTRY[matchedKey] : FORMULARY_REGISTRY.apixaban
+  const doseNum = quantity.value
+  const unitStr = quantity.unit
+  const entry = FORMULARY_REGISTRY[matchedKey]
   const canonicalDrug = entry.canonical
   const spellingCorrected = Boolean(matchedOriginal && matchedOriginal.toLowerCase() !== canonicalDrug.toLowerCase())
 
@@ -942,7 +928,7 @@ export async function processClinicalComment(comment: string): Promise<ClinicalE
     timingSchedule = "Every 8 hours (08:00, 14:00, 20:00)"
   }
 
-  if (lower.includes("iv") || lower.includes("intravenous") || lower.includes("infusion")) {
+  if (/\b(iv|intravenous|infusion)\b/i.test(lower)) {
     route = "IV"
   } else if (lower.includes("oral") || lower.includes("po") || lower.includes("by mouth")) {
     route = "oral"
@@ -1210,17 +1196,8 @@ export async function submitDecision(
       }
     }
 
-    if (standardizedAction) {
-      await updateFhirDatabase(patientId, {
-        standardized_action: standardizedAction,
-        standardized_drug: fullExtractionResult?.standardized_drug || modifications?.[0]?.dosage_name || "Apixaban",
-        dosage: fullExtractionResult?.dosage || modifications?.[0]?.proposed_dosage || 5,
-        dosage_unit: fullExtractionResult?.dosage_unit || modifications?.[0]?.dosage_unit || "mg",
-        route: fullExtractionResult?.route || modifications?.[0]?.route || "oral",
-        frequency: fullExtractionResult?.frequency || modifications?.[0]?.frequency || "twice daily",
-        timing_schedule: fullExtractionResult?.timing_schedule || modifications?.[0]?.timing_schedule || "Every 12 hours (08:00, 20:00)",
-        doctor_note: justification,
-      })
+    if (!standardizedAction || fullExtractionResult?.is_valid === false || fullExtractionResult?.is_appropriate === false) {
+      throw new Error("A valid extracted prescription is required before modifying the order.")
     }
   }
 
@@ -1239,25 +1216,9 @@ export async function submitDecision(
     ? `${baseUrl}/api/orchestrator/resume`     
     : `${baseUrl}/api/orchestrator/checkpoint`
 
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3500)
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    })
-    clearTimeout(timeoutId)
+  await postDecision(endpoint, payload)
+  return { status: decision === "override" ? "restarting" : "success", decision, patientId }
 
-    if (response.ok && decision === "override") {
-      return { status: "restarting" }
-    }
-  } catch (err) {
-    console.warn(`Gateway ${endpoint} unreachable at ${baseUrl}; recording decision locally:`, err)
-  }
-
-  return { status: "success", decision, patientId }
 }
 
 export async function resupplyPatientData(

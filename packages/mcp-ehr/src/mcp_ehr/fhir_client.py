@@ -11,6 +11,7 @@ Updated to synchronize with the expanded PatientData contract:
 """
 
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -81,7 +82,7 @@ LOINC_FIELD_MAP = {
     "33914-3": "eGFR",
     "48642-3": "eGFR",
     "48643-1": "eGFR",
-    "1751-7": "ALT",
+    "1742-6": "ALT",  # LOINC: alanine aminotransferase; 1751-7 is albumin.
     "1920-8": "AST",
     "777-3": "platelets",
     "26515-7": "platelets",
@@ -99,7 +100,7 @@ LOINC_FIELD_MAP = {
     "48672-0": "QTc",
 }
 
-FHIR_BASE_URL = "https://hapi.fhir.org/baseR4"
+FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "https://hapi.fhir.org/baseR4").rstrip("/")
 _ID_MAP_PATH = Path(__file__).parent / "seeded_patient_ids.json"
 _EXPANDED_JSON_PATH = Path(__file__).parent / "patients_expanded.json"
 
@@ -139,13 +140,13 @@ def _load_id_maps() -> Tuple[Dict[str, str], Dict[str, str], Dict[str, Dict[str,
         return {}, {}, {}
 
 
-def _compute_age(birth_date_str: str) -> int:
+def _compute_age(birth_date_str: str) -> Optional[int]:
     try:
         birth = date.fromisoformat(birth_date_str.split("T")[0])
         today = date.today()
         return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
     except Exception:
-        return 50
+        return None
 
 
 def _normalize_sex(raw_gender: Any, compact: bool = False) -> str:
@@ -230,7 +231,7 @@ def _parse_everything_bundle(bundle: Dict[str, Any], canonical_id: str) -> Dict[
         "cohort": None,
         "name": None,
         "dob": None,
-        "age": 50,
+        "age": None,
         "sex": "unknown",
         "weight": None,
         "diagnoses": [],
@@ -243,9 +244,9 @@ def _parse_everything_bundle(bundle: Dict[str, Any], canonical_id: str) -> Dict[
         "medical_history": [],
         "medical_history_narrative": None,
         "current_symptoms": [],
-        "consent_capacity": True,
+        "consent_capacity": None,
         "ecog_status": None,
-        "pregnancy_test_result": "negative",
+        "pregnancy_test_result": None,
         "last_systemic_therapy_date": None,
     }
 
@@ -583,12 +584,13 @@ def get_patient(patient_identifier: str) -> Dict[str, Any]:
                                 for k, v in result[bucket].items()
                             }
 
+                    result["data_source"] = "local_synthetic_fixture"
                     return result
         except Exception as exc:
             print(f"[FHIR Notice] Failed reading patients_expanded.json: {exc}")
 
     # 2. Search by internal identifier tag on FHIR server if needed
-    if not fhir_id and internal_id:
+    if internal_id and clean_id not in int_to_fhir and clean_id not in fhir_to_int:
         try:
             search_url = f"{FHIR_BASE_URL}/Patient"
             resp = httpx.get(
@@ -616,6 +618,7 @@ def get_patient(patient_identifier: str) -> Dict[str, Any]:
         if resp.status_code == 200:
             bundle = resp.json()
             patient_data = _parse_everything_bundle(bundle, canonical_id=str(target_fhir_id))
+            patient_data["data_source"] = "fhir_http_response"
             patient_data["patient_id"] = internal_id
             patient_data["internal_id"] = internal_id
             patient_data["fhir_id"] = str(target_fhir_id)

@@ -1,0 +1,21 @@
+{
+  "endpoint": "public HAPI FHIR R4 test server",
+  "checks": [
+    {
+      "alias": "P001",
+      "status": 404,
+      "direct_patient_status": 404
+    },
+    {
+      "alias": "P002",
+      "status": 404,
+      "direct_patient_status": 404
+    },
+    {
+      "alias": "P003",
+      "status": 404,
+      "direct_patient_status": 404
+    }
+  ],
+  "note": "Explicitly user-approved check. Only counts and HTTP status retained; no patient contents saved."
+}

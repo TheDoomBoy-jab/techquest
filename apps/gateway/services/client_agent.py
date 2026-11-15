@@ -558,6 +558,10 @@ def _modification_text(modifications: list[dict]) -> str:
 def _apply_modifications(action: str, modifications: list[dict]) -> str:
     if not modifications:
         return action
+    if len(modifications) == 1:
+        mod = modifications[0]
+        if all(mod.get(key) is not None for key in ("dosage_name", "proposed_dosage", "dosage_unit", "route", "frequency")):
+            return f"{mod['dosage_name']} {_format_dosage_val(mod['proposed_dosage'])} {mod['dosage_unit']} {mod['route']} {mod['frequency']}"
     updated = action
     for mod in modifications:
         drug = mod.get("dosage_name", "")

@@ -35,7 +35,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
-import { processClinicalComment, submitDecision, resupplyPatientData, updateFhirDatabase } from "@/app/actions"
+import { processClinicalComment, submitDecision, resupplyPatientData } from "@/app/actions"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
 import { getGatewayUrl } from "@/lib/api-config"
@@ -122,6 +122,8 @@ export function DecisionGateway({
   const [resupplyError, setResupplyError] = useState<string | null>(null)
 
   const [comment, setComment] = useState("")
+  const commentRef = useRef("")
+  const [overrideError, setOverrideError] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionResult, setExtractionResult] = useState<any>(null)
 
@@ -710,6 +712,8 @@ export function DecisionGateway({
   // 1-Click Remediation Recommendation
   async function handleApplyRemediation() {
     setIsApplyingRemediation(true)
+    commentRef.current = remPrompt
+    setExtractionResult(null)
     setComment(remPrompt)
 
     const standardized = remDose.includes("5 mg") ? "Apixaban 5 mg oral twice daily"
@@ -732,21 +736,8 @@ export function DecisionGateway({
       : remDose.includes("200 mg") ? "Q3W Day 1"
       : "Every morning (08:00)"
 
-    setActiveAction(standardized)
-    setOrderModified(true)
-    setDecision("override")
-
+    setOverrideError(null)
     try {
-      await updateFhirDatabase(patient.id, {
-        standardized_action: standardized,
-        standardized_drug: drugName,
-        dosage: dosageVal,
-        dosage_unit: "mg",
-        route: routeVal,
-        frequency: freqVal,
-        timing_schedule: scheduleVal,
-        doctor_note: remPrompt,
-      })
       await submitDecision(
         patient.id,
         "override",
@@ -770,14 +761,16 @@ export function DecisionGateway({
           timing_schedule: scheduleVal,
         }
       )
+      setActiveAction(standardized)
+      setOrderModified(true)
+      setDecision("override")
+      commentRef.current = ""
       setComment("")
       setModifyOpen(false)
       onPatientUpdated?.({ action: standardized })
       onRestartStream?.(standardized)
     } catch (error) {
-      console.warn("Remediation execution warning (applying locally):", error)
-      onPatientUpdated?.({ action: standardized })
-      onRestartStream?.(standardized)
+      setOverrideError(error instanceof Error ? error.message : "Unable to apply the change. Please retry.")
     } finally {
       setIsApplyingRemediation(false)
     }
@@ -786,11 +779,14 @@ export function DecisionGateway({
   // AI Extraction for Clinical Override
   async function handleExtract() {
     setIsExtracting(true)
+    setOverrideError(null)
+    const note = comment
+    commentRef.current = note
     try {
-      const result = await processClinicalComment(comment)
-      setExtractionResult(result)
+      const result = await processClinicalComment(note)
+      if (commentRef.current === note) setExtractionResult(result)
     } catch (error) {
-      console.error("Failed to extract parameters:", error)
+      setOverrideError("Unable to extract the prescription. Please retry.")
     } finally {
       setIsExtracting(false)
     }
@@ -798,6 +794,8 @@ export function DecisionGateway({
 
   // Override Submit
   async function handleOverrideSubmit() {
+    if (!extractionResult?.is_valid || extractionResult?.is_appropriate === false) return
+    setOverrideError(null)
     setIsSubmittingOverride(true)
     let updated = activeAction
     if (extractionResult?.standardized_action) {
@@ -806,10 +804,6 @@ export function DecisionGateway({
       const mod = extractionResult.modifications[0]
       updated = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit || "mg"} ${mod.route || "oral"} ${mod.frequency || "twice daily"}`
     }
-    setActiveAction(updated)
-    setOrderModified(true)
-    setDecision("override")
-
     try {
       await submitDecision(
         patient.id,
@@ -818,18 +812,17 @@ export function DecisionGateway({
         extractionResult?.modifications || [],
         extractionResult
       )
+      setActiveAction(updated)
+      setOrderModified(true)
+      setDecision("override")
       setExtractionResult(null)
+      commentRef.current = ""
       setComment("")
       setModifyOpen(false)
       onPatientUpdated?.({ action: updated })
       onRestartStream?.(updated)
     } catch (error) {
-      console.warn("Remote override dispatch warning (local override active):", error)
-      setExtractionResult(null)
-      setComment("")
-      setModifyOpen(false)
-      onPatientUpdated?.({ action: updated })
-      onRestartStream?.(updated)
+      setOverrideError(error instanceof Error ? error.message : "Unable to save the prescription. Please retry.")
     } finally {
       setIsSubmittingOverride(false)
     }
@@ -2657,6 +2650,7 @@ export function DecisionGateway({
               </span>
             </div>
 
+            {overrideError && <p role="alert" className="text-sm text-rose-300">{overrideError}</p>}
             {/* AI Extraction State 1: Awaiting Input or Invalid / Warning */}
             {(!extractionResult?.is_valid || extractionResult?.is_appropriate === false) && (
               <div className="space-y-4">
@@ -2680,7 +2674,7 @@ export function DecisionGateway({
                 <Field label="Clinical Rationale & Doctor's Prescription Note">
                   <textarea
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
+                    onChange={(e) => { commentRef.current = e.target.value; setComment(e.target.value); setExtractionResult(null); setOverrideError(null) }}
                     rows={4}
                     placeholder="E.g., Patient exhibits normal CrCl 68 mL/min and stable renal clearance. Titrate apixaban to 5 mg oral twice daily per protocol Arm A specifications..."
                     className="w-full resize-none rounded-xl border border-[#2e2e2e] bg-[#1a1a1a] p-3.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none leading-relaxed"
