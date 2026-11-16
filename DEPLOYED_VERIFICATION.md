@@ -30,3 +30,7 @@ These tests establish a working deployed demonstration. They do not independentl
 ## Database persistence follow-up, 2026-11-16
 
 The updated gateway now returns HTTP 200 from `/api/orchestrator/capabilities` and advertises verified Supabase saves. A confirmed update of synthetic P044's age to its existing value returned HTTP 200 with a verified receipt. An independent Supabase read matched the receipt's changed save timestamp and confirmed that age and the full clinical data object stayed unchanged. The local mirror was also reported saved. No medication, dosage, or clinical decision was changed in this check. See `deployed-persistence-check.json` and `DOSAGE_FIXES.md` for evidence and scope.
+
+## Dose-policy follow-up, 2026-11-17 (Asia/Kolkata)
+
+The numeric dose-policy version is now active. The deployed API rejects the reported excessive quantities before saving, and a fresh synthetic P010 evaluation of 10000 mg Apixaban returns `NOT_JUSTIFIED` and `UNSAFE`. See `deployed-dose-policy-check.json` and `DOSE_VALIDATION_FIX.md` for the live checks and their limits. General clinical correctness remains unverified.

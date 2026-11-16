@@ -24,3 +24,9 @@ The Apixaban limit is for this demo's selected antithrombotic regimen, not a uni
 Regression coverage includes the reported 10000/100000 mg cases, nearby arbitrary values, g/mcg conversions, zero/negative/unsupported quantities, interval-specific biologic limits, optimistic models, specialist outages, renamed patient IDs, and rejection before database writes. Server-action tests exercise the actual result, extraction, acceptance, and update functions. These tests isolate external providers and database transport; they do not establish clinical accuracy.
 
 Deploy both frontend and gateway. The gateway capability response must include `dose_policy_version: "demo-dose-policy-v1"`. The frontend blocks prescription saves until this version is present. Existing demo records and historical false approvals were not rewritten or replaced with guessed prescriptions.
+
+## Live verification, 2026-11-17 (Asia/Kolkata)
+
+The deployed gateway returned HTTP 200 with `dose_policy_version: "demo-dose-policy-v1"`. Prescription-save requests for 10000 mg, 100000 mg and 10 g Apixaban against a nonexistent test ID each returned HTTP 422 with a dose-boundary rejection. No existing patient's prescription was targeted by those save requests.
+
+A fresh initial review of synthetic P010 for `Apixaban 10000 mg oral twice daily` returned HTTP 200 with the matching action, `NOT_JUSTIFIED`, `UNSAFE`, `EXCEEDS_LIMIT`, and `needs_human_review: true`. This created review state; no prescription-save or acceptance request was submitted for P010. The result is recorded in `deployed-dose-policy-check.json`.

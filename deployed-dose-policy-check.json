@@ -1,0 +1,29 @@
+{
+  "recorded_at_utc": "2026-11-16T22:30:31Z",
+  "local_verification_date": "2026-11-17",
+  "local_timezone": "Asia/Kolkata",
+  "gateway_url": "https://techquest-z8iw.onrender.com",
+  "capabilities_http_status": 200,
+  "dose_policy_version": "demo-dose-policy-v1",
+  "save_rejection_tests": {
+    "used_nonexistent_test_id": true,
+    "cases": [
+      {"dose": 10000, "unit": "mg", "http_status": 422, "rejected_by_dose_gate": true},
+      {"dose": 100000, "unit": "mg", "http_status": 422, "rejected_by_dose_gate": true},
+      {"dose": 10, "unit": "g", "http_status": 422, "rejected_by_dose_gate": true}
+    ]
+  },
+  "review_test": {
+    "patient_id": "P010",
+    "prescribed_action": "Apixaban 10000 mg oral twice daily",
+    "evaluation_start_http": 200,
+    "evaluation_http": 200,
+    "requested_action_matches": true,
+    "final_verdict": "NOT_JUSTIFIED",
+    "needs_human_review": true,
+    "safety_status": "UNSAFE",
+    "dose_policy_status": "EXCEEDS_LIMIT",
+    "prescription_write_or_acceptance_submitted": false
+  },
+  "scope": "Live API rejection and fresh review verification. This does not establish general clinical accuracy."
+}
