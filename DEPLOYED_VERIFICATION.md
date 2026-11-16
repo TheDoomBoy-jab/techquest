@@ -21,6 +21,10 @@ The read-only package GET returned 404 before the corresponding evaluation had s
 
 ## Scope
 
-Verified via direct HTTP calls because Safari automation was unavailable during this session. No browser visual interaction or screenshot was verified. No accept/reject, resupply, patient-update or final clinical decision action was submitted. Evaluation creates normal demo run state and generated review packages.
+The initial scenario checks used direct HTTP calls because Safari automation was unavailable. No browser visual interaction or screenshot was verified. Those initial checks did not submit accept/reject, resupply, patient-update or final clinical decision actions. Evaluation creates normal demo run state and generated review packages.
 
 These tests establish a working deployed demonstration. They do not independently establish clinical correctness, calibrated agent confidence, provider-level model provenance, or availability of the old public HAPI patient records. The three HAPI seed references previously checked still returned 404; that is a separate external integration/data issue and does not invalidate the observed deployed demo.
+
+## Database persistence follow-up, 2026-11-16
+
+The updated gateway now returns HTTP 200 from `/api/orchestrator/capabilities` and advertises verified Supabase saves. A confirmed update of synthetic P044's age to its existing value returned HTTP 200 with a verified receipt. An independent Supabase read matched the receipt's changed save timestamp and confirmed that age and the full clinical data object stayed unchanged. The local mirror was also reported saved. No medication, dosage, or clinical decision was changed in this check. See `deployed-persistence-check.json` and `DOSAGE_FIXES.md` for evidence and scope.

@@ -1,6 +1,6 @@
 # Doctor-note modification regression fixes
 
-Verified locally on 2026-11-16. The completed-stream result-loading fix was also verified against the deployed response. The confirmation and verified-persistence changes below require an updated gateway and a reachable Supabase project; a live database write has not been verified.
+Verified locally on 2026-11-16. The completed-stream result-loading fix was also verified against the deployed response. After the gateway deployment and Supabase restoration, a live save was verified through the gateway and independently read back from Supabase; see the live verification below.
 
 ## Fixed behavior
 
@@ -44,7 +44,13 @@ The database transport and external specialist responses are test fixtures. Thes
 - Saved prescriptions take precedence over intake scenario presets. Remote evaluation guardrail results are no longer overwritten with a locally forced pass after demographic resupply.
 - Extraction panels and the confirmation dialog explicitly require clinical review instead of calling parsed notes clinically validated. The dialog also calls out a change of medication. Parsing a positive quantity establishes text extraction only; it does not establish patient-specific dose safety or protocol compliance.
 
-The configured Supabase hostname initially returned public DNS `NXDOMAIN`. On the follow-up check, public DNS resolved and an authenticated read of the existing patient table returned HTTP 200. The local resolver still had a cached negative answer, so that read used the public DNS answer while keeping TLS verification enabled. The live schema has no standalone `prescribed_action` column: prescription updates and verification now use `clinical_data.prescribed_action` in the existing JSONB column, alongside medications and dosage instructions. The `patients` table needs `patient_id`, `clinical_data`, `updated_at`, `age` and `sex` columns, all present in the inspected schema. No database migration or live patient mutation was performed. The writeback contract targets this application's Supabase table; it does not claim to update an external FHIR server.
+The configured Supabase hostname initially returned public DNS `NXDOMAIN`. On the follow-up check, public DNS resolved and an authenticated read of the existing patient table returned HTTP 200. The local resolver still had a cached negative answer, so that read used the public DNS answer while keeping TLS verification enabled. The live schema has no standalone `prescribed_action` column: prescription updates and verification now use `clinical_data.prescribed_action` in the existing JSONB column, alongside medications and dosage instructions. The `patients` table needs `patient_id`, `clinical_data`, `updated_at`, `age` and `sex` columns, all present in the inspected schema. No database migration was required. The writeback contract targets this application's Supabase table; it does not claim to update an external FHIR server.
+
+## Live save verification
+
+After deployment, `/health` and `/api/orchestrator/capabilities` both returned HTTP 200, with the verified-save contract enabled. A confirmed POST to `/api/fhir/update` wrote synthetic demo patient P044's existing age back unchanged. The gateway returned HTTP 200 and a verified Supabase receipt. A separate authenticated read of Supabase matched the receipt's new `updated_at`; age and the entire `clinical_data` object were unchanged, and the gateway reported its local mirror saved. Only the save timestamp changed in the database row.
+
+The result is recorded in `deployed-persistence-check.json`. This verifies the deployed database save path and read-back. It does not establish a browser-driven prescription modification, specialist re-evaluation after that modification, or durability across a process restart; those remain separate checks.
 
 ## Reproduce
 

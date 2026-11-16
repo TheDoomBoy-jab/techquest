@@ -1,0 +1,28 @@
+{
+  "recorded_at_utc": "2026-11-16T14:42:32Z",
+  "gateway_url": "https://techquest-z8iw.onrender.com",
+  "health_http_status": 200,
+  "capabilities_http_status": 200,
+  "confirmed_prescription_updates": true,
+  "persistence": "supabase_verified",
+  "save_test": {
+    "endpoint": "/api/fhir/update",
+    "patient_id": "P044",
+    "demo_category": "SYNTHETIC_EHR",
+    "operation": "Write the existing age back unchanged",
+    "confirmed": true,
+    "http_status": 200,
+    "verified_receipt": true,
+    "independent_database_read": true,
+    "database_timestamp_matches_receipt": true,
+    "database_timestamp_changed": true,
+    "age_unchanged": true,
+    "clinical_data_unchanged": true,
+    "local_mirror_saved": true
+  },
+  "scope": {
+    "prescription_change_tested": false,
+    "browser_workflow_tested": false,
+    "process_restart_tested": false
+  }
+}
