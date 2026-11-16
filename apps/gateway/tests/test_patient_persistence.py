@@ -13,9 +13,9 @@ from services.supabase_reports import PatientPersistenceError
 @pytest.fixture
 def database(monkeypatch):
     state = {
-        'row': {'patient_id': 'TEST', 'prescribed_action': 'Apixaban 5 mg oral twice daily',
+        'row': {'patient_id': 'TEST', 'age': 45, 'sex': 'female',
                 'updated_at': '2026-01-01T00:00:00+00:00',
-                'clinical_data': {'medications': ['Apixaban 5 mg oral twice daily'], 'adjudication_reports': [{'report_id': 'existing'}]}},
+                'clinical_data': {'prescribed_action': 'Apixaban 5 mg oral twice daily', 'medications': ['Apixaban 5 mg oral twice daily'], 'adjudication_reports': [{'report_id': 'existing'}]}},
         'read_status': 200, 'write_status': 200, 'empty_write': False, 'mismatch': False,
         'calls': [],
     }
@@ -23,9 +23,13 @@ def database(monkeypatch):
 
     def handle(request):
         state['calls'].append(request)
+        # Match the live schema: the prescription is a JSON field, not a column.
+        if 'prescribed_action' in request.url.params.get('select', '').split(','):
+            return httpx.Response(400, json={'code': '42703', 'message': 'column patients.prescribed_action does not exist'})
         if request.method == 'GET':
             return httpx.Response(state['read_status'], json=[copy.deepcopy(state['row'])] if state['row'] else [])
         assert request.method == 'PATCH'
+        assert 'prescribed_action' not in json.loads(request.content)
         assert request.headers['prefer'] == 'return=representation'
         assert request.url.params['patient_id'] == 'eq.TEST'
         assert request.url.params['updated_at'] == 'eq.' + state['row']['updated_at']
@@ -36,7 +40,7 @@ def database(monkeypatch):
         state['row'].update(json.loads(request.content))
         returned = copy.deepcopy(state['row'])
         if state['mismatch']:
-            returned['prescribed_action'] = 'Apixaban 5 mg oral twice daily'
+            returned['clinical_data']['prescribed_action'] = 'Apixaban 5 mg oral twice daily'
         return httpx.Response(200, json=[returned])
 
     monkeypatch.setattr(supabase_reports, '_config', lambda: ('https://database.test', 'test-key'))
@@ -54,7 +58,7 @@ def test_save_returns_verified_database_receipt_and_preserves_other_fields(datab
     receipt = supabase_reports.sync_patient_data_to_supabase('TEST', update_fields())
     assert receipt['verified'] is True
     assert receipt['storage'] == 'supabase'
-    assert receipt['prescribed_action'] == database['row']['prescribed_action'] == update_fields()['prescribed_action']
+    assert receipt['prescribed_action'] == database['row']['clinical_data']['prescribed_action'] == update_fields()['prescribed_action']
     assert database['row']['clinical_data']['adjudication_reports'] == [{'report_id': 'existing'}]
     assert database['row']['clinical_data']['dosage_instructions'] == update_fields()['dosage_instructions']
 
@@ -169,7 +173,10 @@ def test_database_save_survives_local_mirror_failure_and_restart(monkeypatch, tm
     assert receipt['verified'] is True and receipt['local_mirror_saved'] is False
     assert path.read_text() == json.dumps({'patients': [old_record]})
     patient_service._PATIENTS_CACHE = None
-    assert patient_service.get_patient_profile('TEST')['patient']['medications'] == ['Apixaban 10 mg oral twice daily']
+    restored = patient_service.get_patient_profile('TEST')
+    assert restored['patient']['medications'] == ['Apixaban 10 mg oral twice daily']
+    assert restored['patient']['default_prescribed_action'] == 'Apixaban 10 mg oral twice daily'
+    assert restored['default_prescribed_action'] == 'Apixaban 10 mg oral twice daily'
 
 
 def test_unconfirmed_modification_never_calls_the_database(monkeypatch):

@@ -89,16 +89,19 @@ def test_http_extraction_resume_stream_and_results(
     monkeypatch.setattr(patient_service, '_PATIENTS_CACHE', {patient_id: copy.deepcopy(record)})
     monkeypatch.setattr(patient_service, 'CANDIDATE_PATHS', [database])
     synced = []
-    stored = {'patient_id': patient_id, 'prescribed_action': initial_action,
+    stored = {'patient_id': patient_id,
               'clinical_data': copy.deepcopy(record['patient']), 'updated_at': '2026-01-01T00:00:00+00:00'}
     original_client = httpx.Client
     def database_transport(request):
+        if 'prescribed_action' in request.url.params.get('select', '').split(','):
+            return httpx.Response(400, json={'code': '42703'})
         if request.method == 'GET':
             return httpx.Response(200, json=[copy.deepcopy(stored)])
         assert request.method == 'PATCH'
         assert request.url.params['updated_at'] == 'eq.' + stored['updated_at']
         assert request.headers['prefer'] == 'return=representation'
         patch = json.loads(request.content)
+        assert 'prescribed_action' not in patch
         stored.update(patch)
         synced.append(copy.deepcopy(patch['clinical_data']))
         return httpx.Response(200, json=[copy.deepcopy(stored)])
@@ -148,7 +151,7 @@ def test_http_extraction_resume_stream_and_results(
                 })
                 assert response.status_code == 200, response.text
                 assert response.json()['persistence']['verified'] is True
-                assert stored['prescribed_action'] == expected
+                assert stored['clinical_data']['prescribed_action'] == expected
                 await orchestrator.run_tasks[patient_id]
                 response = await client.get('/api/orchestrator/stream', params={'patientId': patient_id, 'action': expected})
                 assert response.status_code == 200

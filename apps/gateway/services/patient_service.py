@@ -125,9 +125,10 @@ def _load_cache() -> Dict[str, Dict[str, Any]]:
             if field in saved:
                 patient[field] = saved[field]
                 record[field] = saved[field]
-        if saved.get("prescribed_action"):
-            patient["default_prescribed_action"] = saved["prescribed_action"]
-            record["default_prescribed_action"] = saved["prescribed_action"]
+        saved_action = clinical.get("prescribed_action") if isinstance(clinical, dict) else None
+        if saved_action:
+            patient["default_prescribed_action"] = saved_action
+            record["default_prescribed_action"] = saved_action
 
     _PATIENTS_CACHE = cache
     return _PATIENTS_CACHE

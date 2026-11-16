@@ -210,7 +210,7 @@ def load_persisted_patients() -> list[dict]:
     try:
         with httpx.Client(timeout=8) as client:
             response = client.get(f"{url}/rest/v1/patients", headers=_headers(key), params={
-                "select": "patient_id,prescribed_action,clinical_data,age,sex",
+                "select": "patient_id,clinical_data,age,sex",
             })
             response.raise_for_status()
             rows = response.json()
@@ -234,7 +234,7 @@ def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
         with httpx.Client(timeout=8) as client:
             response = client.get(base, headers=headers, params={
                 "patient_id": f"eq.{clean_id}",
-                "select": "patient_id,prescribed_action,clinical_data,updated_at",
+                "select": "patient_id,clinical_data,updated_at",
             })
             response.raise_for_status()
             rows = response.json()
@@ -253,7 +253,7 @@ def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
                         value = str(value).lower()
                         value = "female" if value.startswith("f") else "male" if value.startswith("m") else value
                     clinical_changes[field] = value
-                    if field in ("age", "sex", "prescribed_action"):
+                    if field in ("age", "sex"):
                         patch_payload[field] = value
             cdata.update(clinical_changes)
             patch_payload["clinical_data"] = cdata
@@ -261,7 +261,7 @@ def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
             saved = client.patch(base, headers=headers, params={
                 "patient_id": f"eq.{clean_id}",
                 "updated_at": f"eq.{version}" if version is not None else "is.null",
-                "select": "patient_id,prescribed_action,clinical_data,updated_at,age,sex",
+                "select": "patient_id,clinical_data,updated_at,age,sex",
             }, json=patch_payload)
             saved.raise_for_status()
             # A 200 with [] or 204 can mean no row was updated. Require evidence.
@@ -279,7 +279,7 @@ def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
             if any(row.get(k) != v for k, v in patch_payload.items() if k not in ("updated_at", "clinical_data")):
                 raise PatientPersistenceError("The saved prescription could not be verified. Reload before retrying.")
             return {"storage": "supabase", "verified": True, "patient_id": clean_id,
-                    "prescribed_action": row.get("prescribed_action"), "updated_at": row["updated_at"]}
+                    "prescribed_action": actual_clinical.get("prescribed_action"), "updated_at": row["updated_at"]}
     except PatientPersistenceError:
         raise
     except Exception as exc:
