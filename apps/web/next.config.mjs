@@ -24,28 +24,33 @@ const nextConfig = {
       'http://localhost:8000'
     ).replace(/\/$/, '');
 
-    return [
-      {
-        source: '/api/orchestrator/:path*',
-        destination: `${gateway}/api/orchestrator/:path*`,
-      },
-      {
-        source: '/api/patients/:path*',
-        destination: `${gateway}/api/patients/:path*`,
-      },
-      {
-        source: '/api/hitl/:path*',
-        destination: `${gateway}/api/hitl/:path*`,
-      },
-      {
-        source: '/api/reports/:path*',
-        destination: `${gateway}/api/reports/:path*`,
-      },
-      {
-        source: '/api/extract-comment',
-        destination: `${gateway}/api/extract-comment`,
-      },
-    ];
+    return {
+      afterFiles: [
+        {
+          source: '/api/orchestrator/:path*',
+          destination: `${gateway}/api/orchestrator/:path*`,
+        },
+        {
+          source: '/api/patients/:path*',
+          destination: `${gateway}/api/patients/:path*`,
+        },
+        {
+          source: '/api/reports/:path*',
+          destination: `${gateway}/api/reports/:path*`,
+        },
+        {
+          source: '/api/extract-comment',
+          destination: `${gateway}/api/extract-comment`,
+        },
+      ],
+      fallback: [
+        // Dynamic HITL routes must apply the dose guard before proxy fallback.
+        {
+          source: '/api/hitl/:path*',
+          destination: `${gateway}/api/hitl/:path*`,
+        },
+      ],
+    };
   },
 };
 
