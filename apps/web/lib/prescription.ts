@@ -1,3 +1,5 @@
+import { checkDosePolicy, DOSE_POLICY_VERSION } from "./dose-policy.mjs"
+
 /** Extract an explicit target quantity, preserving a changed-to dose. */
 export function targetDose(note: string): { value: number; unit: string } | null {
   const quantity = String.raw`(?<![\w.-])(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)\b(?!\s*\/)`
@@ -75,6 +77,8 @@ export function preparePrescriptionConfirmation(note: string, extraction: any): 
   }
   const [drug, unit, route, frequency] = fields.map((v) => v.trim())
   const action = `${drug} ${dose} ${unit} ${route} ${frequency}`
+  const policy = checkDosePolicy(action)
+  if (policy.status !== "WITHIN_LIMIT") throw new Error(policy.reason)
   const modification = { ...mod, dosage_name: drug, proposed_dosage: dose, dosage_unit: unit, route, frequency }
   return {
     note: note.trim(), action, drug, dose, unit, route, frequency,
@@ -89,6 +93,10 @@ export async function savePatientChange(
   expectedAction?: string, request: typeof fetch = fetch,
 ) {
   if (payload.confirmed !== true) throw new Error("Confirm the change before saving.")
+  if (expectedAction) {
+    const policy = checkDosePolicy(expectedAction)
+    if (policy.status !== "WITHIN_LIMIT") throw new Error(policy.reason)
+  }
   const capability = await request(`${baseUrl}/api/orchestrator/capabilities`, {
     cache: "no-store", signal: AbortSignal.timeout(5000),
   })
@@ -96,6 +104,9 @@ export async function savePatientChange(
   const support = await capability.json()
   if (support.confirmed_prescription_updates !== true || support.persistence !== "supabase_verified") {
     throw new Error("The gateway cannot confirm database saves yet. The change was not submitted.")
+  }
+  if (expectedAction && support.dose_policy_version !== DOSE_POLICY_VERSION) {
+    throw new Error("The backend dose validation update is required. The prescription was not submitted.")
   }
   const response = await postDecision(`${baseUrl}${endpoint}`, payload, request)
   const result = await response.json()

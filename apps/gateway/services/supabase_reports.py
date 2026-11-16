@@ -222,6 +222,9 @@ def load_persisted_patients() -> list[dict]:
 
 def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
     """Save to Supabase and verify the returned row. Never report a cache-only save."""
+    from .dose_policy import require_dose_policy
+    if updates.get("prescribed_action"):
+        require_dose_policy(updates["prescribed_action"])
     url, key = _config()
     if not url or not key or not httpx:
         raise PatientPersistenceError("Database saving is not configured. The change was not saved.")

@@ -30,6 +30,7 @@ from services.patient_service import (
     update_patient_in_cache,
 )
 from services.supabase_reports import PatientPersistenceError, ReportPersistenceError, append_final_report, get_final_reports
+from services.dose_policy import DosePolicyError, dose_policy_version, require_dose_policy
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,7 +43,11 @@ _resume_locks: dict[str, asyncio.Lock] = {}
 
 async def _save_patient(**changes) -> dict:
     try:
+        if changes.get("prescribed_action"):
+            require_dose_policy(changes["prescribed_action"])
         receipt = await asyncio.to_thread(update_patient_in_cache, **changes)
+    except DosePolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except PatientPersistenceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except (ValueError, TypeError) as exc:
@@ -56,7 +61,7 @@ async def _save_patient(**changes) -> dict:
 
 @router.get("/api/orchestrator/capabilities")
 async def persistence_capabilities() -> dict:
-    return {"confirmed_prescription_updates": True, "persistence": "supabase_verified"}
+    return {"confirmed_prescription_updates": True, "persistence": "supabase_verified", "dose_policy_version": dose_policy_version()}
 
 
 def _event(name: str, status: str, **details) -> dict:
@@ -688,9 +693,20 @@ async def checkpoint_orchestrator(payload: dict):
     patient_id = payload.get("patientId")
     if not patient_id:
         raise HTTPException(status_code=400, detail="patientId is required")
+    decision = str(payload.get("decision", "")).lower()
+    if decision not in {"accept", "reject"}:
+        raise HTTPException(status_code=400, detail="decision must be accept or reject")
     package = hitl_packages.get(patient_id) or arbitration_results.get(patient_id)
     if not package:
         package = _simulated_rag_output(patient_id, payload)
+
+    if decision == "accept":
+        try:
+            require_dose_policy(package.get("prescribed_action", ""))
+        except DosePolicyError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if package.get("final_verdict") != "JUSTIFIED" or package.get("safety_result", {}).get("safety_status") != "SAFE" or package.get("protocol_compliance_result", {}).get("compliance_status") != "COMPLIANT":
+            raise HTTPException(status_code=409, detail="A completed, aligned clinical evaluation is required before acceptance")
 
     final_report = {
         "patient_id": patient_id,

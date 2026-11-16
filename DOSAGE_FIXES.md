@@ -24,8 +24,8 @@ Read-only verification against the actual deployed P044 response confirmed: HTTP
 
 ## Verification
 
-- 44 Python regression tests passed, including dosage, persistence and FHIR client coverage.
-- 26 Node/React regression tests passed.
+- 94 Python regression tests passed, including dosage boundaries, persistence and FHIR client coverage.
+- 37 Node/React regression tests passed.
 - Next.js production build and TypeScript checking passed.
 - `git diff --check` passed.
 
@@ -34,6 +34,8 @@ The HTTP integration tests use FastAPI ASGI requests through the real extraction
 The database transport and external specialist responses are test fixtures. These tests establish the application's state and data flow, not clinical correctness, provider availability or live database durability. React/jsdom tests use the actual confirmation dialog and intake component, isolating server actions in the intake tests. They verify cancellation, failed saves, confirmed submission and restoration of a saved order. The tests do not mutate the public demo or the repository's patient fixtures. This verification did not include Safari UI interaction.
 
 ## Confirmed persistence
+
+The subsequent [dose-validation correction](DOSE_VALIDATION_FIX.md) removes patient-ID approval overrides and adds numerical dose gates. Persistence success alone does not establish clinical approval.
 
 - Both intake and post-evaluation modification paths show the patient, current/proposed prescription and doctor's note before saving. Opening or cancelling the dialog performs no write. Duplicate clicks are blocked while saving.
 - The frontend checks `/api/orchestrator/capabilities` before submitting a save, so an older gateway cannot silently treat a modification as a cache-only success. The endpoint advertises the supported contract, not current database health.

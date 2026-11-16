@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .llm_client import call_llm, parse_json_response
+from .dose_policy import check_dose_policy, enforce_specialist_dose
 
 
 def _extract_lab_val(labs: dict, key: str, default: float) -> float:
@@ -25,6 +26,9 @@ def evaluate(
     report_history: list[dict],
     modification: str = "",
 ) -> dict:
+    dose_check = check_dose_policy(recent_action)
+    if dose_check["status"] != "WITHIN_LIMIT":
+        return enforce_specialist_dose("safety", {}, recent_action)
     prompt = f"""You are the TrialGuard Patient Safety Agent.
 Assess patient-specific safety using ONLY the supplied patient data and recent action.
 Evaluate disease-specific pharmacology, drug-drug interactions, organ clearance, and toxicity thresholds.
@@ -62,12 +66,13 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
     anc = _extract_lab_val(labs, "ANC", 3800.0)
     hb = _extract_lab_val(labs, "hemoglobin", 13.5)
 
-    is_high_dose = any(term in dosage_str or term in action_str for term in ["40 mg", "40mg", "60 mg", "60mg", "20 mg", "20mg", "overdose", "50 mg", "400 mg"])
     is_low_crcl = crcl < 30.0 or egfr < 30.0
     is_high_transaminases = alt > 120.0 or ast > 120.0
     is_myelosuppressed = anc < 1500.0 or platelets < 100000.0
 
-    status = str(result.get("safety_status", "SAFE")).upper()
+    status = str(result.get("safety_status", "NEEDS_REVIEW")).upper()
+    if status not in {"SAFE", "UNSAFE", "NEEDS_REVIEW"}:
+        status = "NEEDS_REVIEW"
     concerns = result.get("concerns", [])
     if not isinstance(concerns, list):
         concerns = [concerns] if concerns else []
@@ -82,28 +87,7 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
     is_mash = not is_oncology and not is_nephropathy and ("steatohepatitis" in diagnoses_text or "mash" in diagnoses_text or "nafld" in diagnoses_text or "pioglitazone" in drug_name or "pioglitazone" in action_str)
     is_afib = not is_oncology and not is_nephropathy and not is_mash
 
-    if is_high_dose:
-        status = "UNSAFE"
-        limit_desc = "200 mg Q3W" if is_oncology else "10-25 mg daily" if is_nephropathy else "30-45 mg daily" if is_mash else "5 mg BID"
-        hazard_desc = (
-            "Severe immune-mediated adverse events (irAEs: pneumonitis, colitis, hepatitis) from biologic overdose."
-            if is_oncology
-            else "Hemodynamic collapse and euglycemic ketoacidosis risk from excessive SGLT2 inhibition."
-            if is_nephropathy
-            else "Cardiovascular fluid overload and congestive decompensation hazard."
-            if is_mash
-            else "Acute systemic hemorrhage hazard due to supra-therapeutic Factor Xa inhibition."
-        )
-        concerns.append({
-            "parameter": "dosage",
-            "observed": recent_action.get("dosage", "Unapproved dose"),
-            "limit": limit_desc,
-            "reason": f"Dose significantly exceeds therapeutic safety boundary ({limit_desc} maximum). {hazard_desc}",
-        })
-        evidence.append("High-Dose Clinical Toxicity Warning")
-        explanation = f"Prescribed dosage represents an unapproved overdose exceeding standard therapeutic safety margins ({limit_desc}). {hazard_desc}"
-
-    elif is_low_crcl:
+    if is_low_crcl:
         status = "UNSAFE"
         concerns.append({
             "parameter": "creatinine_clearance",
@@ -139,9 +123,10 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
         evidence.append("Myelosuppression Oncology Toxicity Contraindication")
         explanation = f"Patient exhibits myelosuppression (ANC {anc:,.0f}/uL, Platelets {platelets:,.0f}/uL). Cytotoxic/immunotherapeutic administration must be held until marrow recovery."
 
+    elif status != "SAFE":
+        explanation = result.get("explanation") or "Patient safety has not been verified; specialist review is required."
     else:
         # Clinically safe, generate tailored disease pharmacology rationale
-        status = "SAFE"
         if is_oncology:
             raw_expl = result.get("explanation", "")
             if raw_expl and "apixaban" not in raw_expl.lower():
@@ -190,5 +175,5 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
         "evidence": evidence,
         "needs_human_review": status != "SAFE",
         "explanation": explanation,
-        "confidence": 0.96 if (is_high_dose or is_low_crcl or is_high_transaminases) else 0.91,
+        "confidence": 0.96 if (is_low_crcl or is_high_transaminases) else 0.91,
     }

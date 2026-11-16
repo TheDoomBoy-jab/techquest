@@ -147,7 +147,7 @@ def synthesize(payload: dict) -> dict:
     
     compliance_status = compliance.get("compliance_status", "UNKNOWN")
     safety_status = safety.get("safety_status", "NEEDS_REVIEW")
-    coverage_status = financial.get("coverage_status", "COVERED")
+    coverage_status = financial.get("coverage_status", "UNKNOWN")
     
     computed_verdict = (
         "NOT_JUSTIFIED" if compliance_status == "NON_COMPLIANT" or safety_status == "UNSAFE"

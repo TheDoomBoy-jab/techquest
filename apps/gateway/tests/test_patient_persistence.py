@@ -49,9 +49,9 @@ def database(monkeypatch):
 
 
 def update_fields():
-    return {'prescribed_action': 'Apixaban 10 mg oral twice daily',
-            'medications': ['Apixaban 10 mg oral twice daily'],
-            'dosage_instructions': {'dose': 10, 'unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}}
+    return {'prescribed_action': 'Apixaban 2.5 mg oral twice daily',
+            'medications': ['Apixaban 2.5 mg oral twice daily'],
+            'dosage_instructions': {'dose': 2.5, 'unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}}
 
 
 def test_save_returns_verified_database_receipt_and_preserves_other_fields(database):
@@ -127,7 +127,7 @@ def test_report_append_cannot_overwrite_a_concurrent_prescription(monkeypatch, t
         if state['patches'] == 1:
             # A confirmed order arrives after the report writer's first read.
             state['row']['updated_at'] = 'concurrent-save'
-            state['row']['clinical_data']['medications'] = ['Apixaban 10 mg oral twice daily']
+            state['row']['clinical_data']['medications'] = ['Apixaban 2.5 mg oral twice daily']
         if request.url.params['updated_at'] != 'eq.' + state['row']['updated_at']:
             return httpx.Response(200, json=[])
         state['row'].update(json.loads(request.content))
@@ -138,7 +138,7 @@ def test_report_append_cannot_overwrite_a_concurrent_prescription(monkeypatch, t
     monkeypatch.setattr(supabase_reports.httpx, 'Client', lambda **kwargs: original_client(transport=httpx.MockTransport(handle), **kwargs))
     report = supabase_reports.append_final_report('TEST', {'summary': 'Synthetic test result'})
     assert state['patches'] == 2
-    assert state['row']['clinical_data']['medications'] == ['Apixaban 10 mg oral twice daily']
+    assert state['row']['clinical_data']['medications'] == ['Apixaban 2.5 mg oral twice daily']
     assert state['row']['clinical_data']['adjudication_reports'][0]['report_id'] == report['report_id']
 
 
@@ -157,7 +157,7 @@ def test_failed_save_leaves_memory_and_disk_unchanged(monkeypatch, tmp_path, fai
         return False if failure == 'false' else None
     monkeypatch.setattr(supabase_reports, 'sync_patient_data_to_supabase', fail)
     with pytest.raises(PatientPersistenceError):
-        patient_service.update_patient_in_cache('TEST', prescribed_action='Apixaban 10 mg oral twice daily', dosage=10)
+        patient_service.update_patient_in_cache('TEST', prescribed_action='Apixaban 2.5 mg oral twice daily', dosage=2.5)
     assert cache['TEST'] == record
     assert path.read_bytes() == original
 
@@ -169,14 +169,14 @@ def test_database_save_survives_local_mirror_failure_and_restart(monkeypatch, tm
     monkeypatch.setattr(patient_service, '_PATIENTS_CACHE', {'TEST': copy.deepcopy(old_record)})
     monkeypatch.setattr(patient_service, 'CANDIDATE_PATHS', [path])
     monkeypatch.setattr(patient_service, '_mirror_patient_update', lambda *args: False)
-    receipt = patient_service.update_patient_in_cache('TEST', prescribed_action='Apixaban 10 mg oral twice daily', dosage=10)
+    receipt = patient_service.update_patient_in_cache('TEST', prescribed_action='Apixaban 2.5 mg oral twice daily', dosage=2.5)
     assert receipt['verified'] is True and receipt['local_mirror_saved'] is False
     assert path.read_text() == json.dumps({'patients': [old_record]})
     patient_service._PATIENTS_CACHE = None
     restored = patient_service.get_patient_profile('TEST')
-    assert restored['patient']['medications'] == ['Apixaban 10 mg oral twice daily']
-    assert restored['patient']['default_prescribed_action'] == 'Apixaban 10 mg oral twice daily'
-    assert restored['default_prescribed_action'] == 'Apixaban 10 mg oral twice daily'
+    assert restored['patient']['medications'] == ['Apixaban 2.5 mg oral twice daily']
+    assert restored['patient']['default_prescribed_action'] == 'Apixaban 2.5 mg oral twice daily'
+    assert restored['default_prescribed_action'] == 'Apixaban 2.5 mg oral twice daily'
 
 
 def test_unconfirmed_modification_never_calls_the_database(monkeypatch):
@@ -190,7 +190,7 @@ def test_unconfirmed_modification_never_calls_the_database(monkeypatch):
 def test_inconsistent_confirmation_never_saves(monkeypatch, changes):
     monkeypatch.setattr(orchestrator, 'runs', {'TEST': {'rag_output': {}, 'result': {'prescribed_action': 'Apixaban 5 mg oral twice daily'}}})
     monkeypatch.setattr(orchestrator, 'update_patient_in_cache', lambda **kw: pytest.fail('Invalid confirmation was saved'))
-    mod = {'dosage_name': 'Apixaban', 'proposed_dosage': 10, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}
+    mod = {'dosage_name': 'Apixaban', 'proposed_dosage': 2.5, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}
     payload = {'patientId': 'TEST', 'confirmed': True, 'modifications': [mod]}
     if 'proposed_dosage' in changes:
         mod.update(changes)
@@ -232,7 +232,7 @@ def test_simultaneous_resume_requests_save_only_once(monkeypatch):
             await finished.wait()
         monkeypatch.setattr(orchestrator, '_execute_run', evaluate)
         payload = {'patientId': 'TEST', 'confirmed': True, 'modifications': [
-            {'dosage_name': 'Apixaban', 'proposed_dosage': 10, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}]}
+            {'dosage_name': 'Apixaban', 'proposed_dosage': 2.5, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}]}
         results = await asyncio.gather(orchestrator.resume_orchestrator(payload), orchestrator.resume_orchestrator(payload), return_exceptions=True)
         assert len(saves) == 1
         assert sum(isinstance(r, dict) and r.get('status') == 'success' for r in results) == 1
@@ -253,7 +253,7 @@ def test_database_failure_does_not_restart_or_replace_a_completed_evaluation(mon
     with pytest.raises(orchestrator.HTTPException) as error:
         asyncio.run(orchestrator.resume_orchestrator({
             'patientId': 'TEST', 'confirmed': True,
-            'modifications': [{'dosage_name': 'Apixaban', 'proposed_dosage': 10, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}],
+            'modifications': [{'dosage_name': 'Apixaban', 'proposed_dosage': 2.5, 'dosage_unit': 'mg', 'route': 'oral', 'frequency': 'twice daily'}],
         }))
     assert error.value.status_code == 503
     assert orchestrator.runs['TEST'] == initial

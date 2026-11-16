@@ -199,6 +199,10 @@ def update_patient_in_cache(
     """Confirm the database write before publishing changed state to local readers."""
     from datetime import datetime, timezone
     from services.supabase_reports import PatientPersistenceError, sync_patient_data_to_supabase
+    from services.dose_policy import require_dose_policy
+
+    if prescribed_action:
+        require_dose_policy(prescribed_action)
 
     clean_id = patient_id.strip().upper()
     cache = _load_cache()

@@ -1,5 +1,7 @@
 # Deployed TechQuest verification
 
+**Correction:** The initial scenario results below included coordinator overrides based on patient identifiers. They establish observed demo execution, not independently calculated clinical results. The P010 false approval exposed this issue; see [the dose-validation fix](DOSE_VALIDATION_FIX.md). Those overrides are removed in the corrected source.
+
 Website: https://techquest-roan.vercel.app
 
 The public browser bundle configures https://techquest-z8iw.onrender.com as its gateway. Checking the current checkout's API paths on the Vercel host alone did not test that deployed backend. The earlier assessment based only on public HAPI seed IDs was too broad.

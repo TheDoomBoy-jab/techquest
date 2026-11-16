@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from services.dose_policy import check_dose_policy
 
 load_dotenv()
 router = APIRouter()
@@ -83,6 +84,15 @@ def _target_dose(comment: str):
     return float(match.group(1)), match.group(2).lower()
 
 
+def _checked_extraction(result: dict) -> dict:
+    if result.get("is_valid"):
+        policy = check_dose_policy(result.get("standardized_action", ""))
+        result["dose_policy_result"] = policy
+        if policy["status"] != "WITHIN_LIMIT":
+            result.update(is_valid=False, is_appropriate=False, warning=policy["reason"], reasoning=policy["reason"])
+    return result
+
+
 def _fallback_extract(comment: str) -> dict:
     text = (comment or "").strip()
     lower = text.lower()
@@ -153,10 +163,12 @@ def _fallback_extract(comment: str) -> dict:
     elif any(k in lower for k in ["qd", "once daily", "daily", "q24h"]):
         freq = "once daily"
         timing = "Every 24 hours (08:00)"
-    elif any(k in lower for k in ["q3w", "every 3 weeks"]):
-        freq = "every 3 weeks"
-        timing = "Day 1 of 21-day cycle (09:00)"
-        route = "IV"
+    else:
+        weeks = re.search(r"\b(?:q(\d+)w|every\s+(\d+)\s+weeks?)\b", lower)
+        if weeks:
+            interval = int(weeks.group(1) or weeks.group(2))
+            freq = f"every {interval} weeks"
+            timing = f"Every {interval} weeks"
 
     if re.search(r"\b(?:iv|intravenous)\b", lower):
         route = "IV"
@@ -165,7 +177,7 @@ def _fallback_extract(comment: str) -> dict:
 
     standardized_action = f"{canonical} {dose_val:g} {unit_val} {route} {freq}"
 
-    return {
+    return _checked_extraction({
         "is_valid": True,
         "is_appropriate": True,
         "warning": None,
@@ -174,7 +186,7 @@ def _fallback_extract(comment: str) -> dict:
         "spelling_corrected": spelling_corrected,
         "standardized_action": standardized_action,
         "target_fhir_field": "MedicationRequest.dosageInstruction[0]",
-        "reasoning": f"Clinical intent verified. Standardized to {standardized_action} ({timing}).",
+        "reasoning": f"Prescription text extracted as {standardized_action} ({timing}); clinical review is still required.",
         "modifications": [
             {
                 "dosage_name": canonical,
@@ -186,7 +198,7 @@ def _fallback_extract(comment: str) -> dict:
                 "target_field": "MedicationRequest.dosageInstruction[0]",
             }
         ],
-    }
+    })
 
 
 _kado_key = os.getenv("KADO_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -242,7 +254,7 @@ async def extract_comment(request: CommentRequest):
                         # The canonical action must agree with the structured target.
                         dumped["standardized_drug"] = mod["dosage_name"]
                         dumped["standardized_action"] = f"{mod['dosage_name']} {target[0]:g} {mod['dosage_unit']} {mod['route']} {mod['frequency']}"
-                        return dumped
+                        return _checked_extraction(dumped)
         except Exception:
             pass
 

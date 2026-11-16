@@ -1,0 +1,74 @@
+{
+  "version": "demo-dose-policy-v1",
+  "scope": "Configured demo formulary limits. Passing a dose limit is not clinical approval.",
+  "drugs": {
+    "apixaban": {
+      "name": "Apixaban",
+      "regimens": [
+        {
+          "route": "oral",
+          "frequency": "twice daily",
+          "max_mg": 5,
+          "allowed_mg": [
+            2.5,
+            5
+          ]
+        }
+      ],
+      "label_reference": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=7be1f4c1-bb2f-4ded-ae9a-515d2a22f93e"
+    },
+    "empagliflozin": {
+      "name": "Empagliflozin",
+      "regimens": [
+        {
+          "route": "oral",
+          "frequency": "once daily",
+          "max_mg": 25,
+          "allowed_mg": [
+            10,
+            25
+          ]
+        }
+      ],
+      "label_reference": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=59ed43d9-b4e0-72a2-e063-6394a90a327d"
+    },
+    "pioglitazone": {
+      "name": "Pioglitazone",
+      "regimens": [
+        {
+          "route": "oral",
+          "frequency": "once daily",
+          "max_mg": 45,
+          "allowed_mg": [
+            15,
+            30,
+            45
+          ]
+        }
+      ],
+      "label_reference": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=d2ddc491-88a9-4063-9150-443b4fa4330c"
+    },
+    "pembrolizumab": {
+      "name": "Pembrolizumab",
+      "regimens": [
+        {
+          "route": "IV",
+          "frequency": "every 3 weeks",
+          "max_mg": 200,
+          "allowed_mg": [
+            200
+          ]
+        },
+        {
+          "route": "IV",
+          "frequency": "every 6 weeks",
+          "max_mg": 400,
+          "allowed_mg": [
+            400
+          ]
+        }
+      ],
+      "label_reference": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=9333c79b-d487-4538-a9f0-71b91a02b287"
+    }
+  }
+}

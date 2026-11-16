@@ -4,22 +4,22 @@ import { preparePrescriptionConfirmation, savePatientChange } from '../lib/presc
 
 function extraction() {
   return { is_valid: true, is_appropriate: true, modifications: [{
-    dosage_name: 'Apixaban', proposed_dosage: 10, dosage_unit: 'mg', route: 'oral', frequency: 'twice daily',
+    dosage_name: 'Apixaban', proposed_dosage: 5, dosage_unit: 'mg', route: 'oral', frequency: 'twice daily',
   }] }
 }
-const action = 'Apixaban 10 mg oral twice daily'
-const support = { confirmed_prescription_updates: true, persistence: 'supabase_verified' }
+const action = 'Apixaban 5 mg oral twice daily'
+const support = { confirmed_prescription_updates: true, persistence: 'supabase_verified', dose_policy_version: 'demo-dose-policy-v1' }
 const saved = { status: 'success', patientId: 'TEST', prescribed_action: action, persistence: {
   storage: 'supabase', verified: true, patient_id: 'TEST', prescribed_action: action, updated_at: '2026-11-16T00:00:00Z',
 } }
 
 test('confirmation snapshots the exact note and complete extracted order', () => {
   const original = extraction()
-  const draft = preparePrescriptionConfirmation('Give Apixaban 10 mg oral twice daily', original)
-  original.modifications[0].proposed_dosage = 5
+  const draft = preparePrescriptionConfirmation('Give Apixaban 5 mg oral twice daily', original)
+  original.modifications[0].proposed_dosage = 2.5
   assert.equal(draft.action, action)
-  assert.equal(draft.modifications[0].proposed_dosage, 10)
-  assert.equal(draft.note, 'Give Apixaban 10 mg oral twice daily')
+  assert.equal(draft.modifications[0].proposed_dosage, 5)
+  assert.equal(draft.note, 'Give Apixaban 5 mg oral twice daily')
 })
 
 test('confirmation rejects incomplete or invalid data without inventing defaults', () => {
@@ -57,7 +57,7 @@ test('a successful HTTP response without matching database proof is rejected', a
     {...saved,persistence:{...saved.persistence,verified:false}},
     {...saved,persistence:{...saved.persistence,storage:'memory'}},
     {...saved,persistence:{...saved.persistence,patient_id:'OTHER'}},
-    {...saved,persistence:{...saved.persistence,prescribed_action:'Apixaban 5 mg oral twice daily'}},
+    {...saved,persistence:{...saved.persistence,prescribed_action:'Apixaban 2.5 mg oral twice daily'}},
     {...saved,persistence:{...saved.persistence,updated_at:'not-a-timestamp'}},
   ]
   for (const response of invalid) {
@@ -73,7 +73,7 @@ test('database errors are surfaced and never become a successful receipt', async
 })
 
 test('a verified save submits the confirmed snapshot once', async () => {
-  const draft=preparePrescriptionConfirmation('Give Apixaban 10 mg oral twice daily',extraction())
+  const draft=preparePrescriptionConfirmation('Give Apixaban 5 mg oral twice daily',extraction())
   const payload={patientId:'TEST',confirmed:true,justification:draft.note,modifications:draft.modifications}
   const calls=[]
   const result=await savePatientChange('', '/resume', payload, 'TEST', action, async(url,options)=>{

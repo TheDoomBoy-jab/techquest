@@ -672,15 +672,18 @@ export function DecisionGateway({
   // Direct Accept or Reject
   async function handleDirectDecision(decisionType: "accept" | "reject") {
     setIsSubmittingDecision(true)
-    setDecision(decisionType)
-    setModifyOpen(false)
+    setOverrideError(null)
     try {
       const justification = decisionType === "reject"
         ? "Order rejected and clinical hold enforced by attending investigator per 21 CFR Part 11."
         : "Order accepted and electronically co-signed by attending investigator per 21 CFR Part 11."
-      await submitDecision(patient.id, decisionType, justification)
+      const result = await submitDecision(patient.id, decisionType, justification)
+      if (result.status !== "success") throw new Error(result.error || "The decision was not confirmed.")
+      setDecision(decisionType)
+      setModifyOpen(false)
     } catch (error) {
-      console.warn("Remote decision sync warning (local decision active):", error)
+      setOverrideError(error instanceof Error ? error.message : "The decision was not confirmed.")
+      setModifyOpen(true)
     } finally {
       setIsSubmittingDecision(false)
     }

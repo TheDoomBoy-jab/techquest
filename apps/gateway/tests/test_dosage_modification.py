@@ -47,13 +47,13 @@ def test_two_resumes_keep_updated_medications_and_history(monkeypatch):
         orchestrator.runs[pid]['result']={'prescribed_action':rag['prescribed_action'],'original_prescribed_action':rag['original_prescribed_action'],'iteration_count':rag['refinement_iteration_count'],'report_history':history}
     monkeypatch.setattr(orchestrator,'_execute_run',execute)
     async def run():
-        for dose,freq in [(5,'twice daily'),(2.5,'once daily')]:
+        for dose,freq in [(5,'twice daily'),(2.5,'twice daily')]:
             await orchestrator.resume_orchestrator({'patientId':'TEST','confirmed':True,'modifications':[{'dosage_name':'Apixaban','proposed_dosage':dose,'dosage_unit':'mg','route':'oral','frequency':freq}]})
             await orchestrator.run_tasks['TEST']
     asyncio.run(run())
     assert evaluated[0]['prescribed_action']=='Apixaban 5 mg oral twice daily'
-    assert evaluated[1]['prescribed_action']=='Apixaban 2.5 mg oral once daily'
-    assert evaluated[1]['rule_analysis_package']['patient']['medications']==['Apixaban 2.5 mg oral once daily']
+    assert evaluated[1]['prescribed_action']=='Apixaban 2.5 mg oral twice daily'
+    assert evaluated[1]['rule_analysis_package']['patient']['medications']==['Apixaban 2.5 mg oral twice daily']
     assert evaluated[1]['original_prescribed_action']=='Apixaban 40 mg oral twice daily'
     assert len(orchestrator.runs['TEST']['result']['report_history'])==3
 
@@ -68,7 +68,7 @@ def test_invalid_resume_does_not_persist(monkeypatch):
 
 @pytest.mark.parametrize('drug,initial_dose,doses,route,frequency', [
     ('Apixaban', 40, [5, 2.5], 'oral', 'twice daily'),
-    ('Pembrolizumab', 400, [200, 100], 'IV', 'every 3 weeks'),
+    ('Pembrolizumab', 400, [(200, 'every 3 weeks'), (400, 'every 6 weeks')], 'IV', 'every 3 weeks'),
 ])
 def test_http_extraction_resume_stream_and_results(
     monkeypatch, tmp_path, drug, initial_dose, doses, route, frequency
@@ -136,14 +136,15 @@ def test_http_extraction_resume_stream_and_results(
             assert response.status_code == 200
             await orchestrator.run_tasks[patient_id]
             previous = initial_dose
-            for iteration, dose in enumerate(doses, start=1):
+            for iteration, target in enumerate(doses, start=1):
+                dose, next_frequency = target if isinstance(target, tuple) else (target, frequency)
                 response = await client.post('/api/extract-comment', json={
-                    'comment': f'Reduce {drug} from {previous} mg to {dose} mg {route} {frequency}',
+                    'comment': f'Change {drug} from {previous} mg to {dose} mg {route} {next_frequency}',
                 })
                 assert response.status_code == 200
                 extracted = response.json()
                 assert extracted['is_valid'] is True
-                expected = f'{drug} {dose:g} mg {route} {frequency}'
+                expected = f'{drug} {dose:g} mg {route} {next_frequency}'
                 assert extracted['standardized_action'] == expected
                 response = await client.post('/api/orchestrator/resume', json={
                     'patientId': patient_id, 'confirmed': True, 'extraction_details': extracted,
@@ -168,7 +169,7 @@ def test_http_extraction_resume_stream_and_results(
                 safety_input = [p for p in dispatched if p['agent-task'] == 'safety'][-1]
                 assert safety_input['patient_data']['medications'] == [expected]
                 assert safety_input['recent_action']['route'].lower() == route.lower()
-                assert safety_input['recent_action']['frequency'] == frequency
+                assert safety_input['recent_action']['frequency'] == next_frequency
                 saved = json.loads(database.read_text())['patients'][0]['patient']
                 assert saved['medications'] == [expected]
                 assert saved['dosage_instructions']['dose'] == dose
@@ -182,7 +183,7 @@ def test_partial_patient_id_does_not_modify_another_patient(monkeypatch):
     cache = {'P001': {'patient_id': 'P001', 'medications': ['Apixaban 5 mg oral twice daily']}}
     original = copy.deepcopy(cache)
     monkeypatch.setattr(patient_service, '_PATIENTS_CACHE', cache)
-    assert patient_service.update_patient_in_cache('P00', prescribed_action='Apixaban 40 mg oral twice daily') is False
+    assert patient_service.update_patient_in_cache('P00', prescribed_action='Apixaban 5 mg oral twice daily') is False
     assert cache == original
 
 

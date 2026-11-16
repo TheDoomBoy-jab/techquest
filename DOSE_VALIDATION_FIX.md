@@ -1,0 +1,25 @@
+# False dose approval: P010 regression
+
+On 2026-11-16, a read-only request to the deployed P010 package returned `Apixaban 100000 mg oral twice daily`, `JUSTIFIED`, `SAFE`, and `needs_human_review: false`. This confirms a false approval, independently of successful database persistence.
+
+## Causes
+
+- Dose detection compared strings against a short list such as `40 mg` and `60 mg`; other numbers bypassed it.
+- The coordinator forcibly replaced specialist results with passing assessments for P001–P032 and several other demo IDs.
+- The frontend could manufacture a clinical result when the gateway was unavailable. Successful parsing and persistence were also insufficient prerequisites for clinical approval.
+
+## Changes
+
+- Removed all patient-ID assessment overrides and the frontend's fabricated-result fallback.
+- Added a shared, versioned demo formulary in `apps/web/lib/dose-policy.json`. Numeric mass units are normalized, route and frequency are checked, and only configured quantities qualify for further review. Unknown or unsupported regimens require review. Passing this boundary alone does not establish patient-specific safety or trial eligibility.
+- Enforced the boundary at extraction, confirmation, server actions, gateway mutations, patient updates, direct persistence, specialist output, and final consensus. An optimistic model cannot override a failed boundary.
+- Acceptance requires an aligned completed evaluation. Failed decision submissions no longer become local successes.
+- The frontend rechecks old results, including P010's false approval, and refuses prescription submissions to a gateway without the matching dose-policy version.
+
+The Apixaban limit is for this demo's selected antithrombotic regimen, not a universal prescribing maximum. Labeling includes indication-dependent regimens outside this demo's scope. Label references are recorded per medication in the configuration: [Apixaban](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=7be1f4c1-bb2f-4ded-ae9a-515d2a22f93e), [Empagliflozin](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=59ed43d9-b4e0-72a2-e063-6394a90a327d), [Pioglitazone](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=d2ddc491-88a9-4063-9150-443b4fa4330c), [Pembrolizumab](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=9333c79b-d487-4538-a9f0-71b91a02b287). These checks are demonstration software and require expert validation before clinical use.
+
+## Verification and deployment
+
+Regression coverage includes the reported 10000/100000 mg cases, nearby arbitrary values, g/mcg conversions, zero/negative/unsupported quantities, interval-specific biologic limits, optimistic models, specialist outages, renamed patient IDs, and rejection before database writes. Server-action tests exercise the actual result, extraction, acceptance, and update functions. These tests isolate external providers and database transport; they do not establish clinical accuracy.
+
+Deploy both frontend and gateway. The gateway capability response must include `dose_policy_version: "demo-dose-policy-v1"`. The frontend blocks prescription saves until this version is present. Existing demo records and historical false approvals were not rewritten or replaced with guessed prescriptions.

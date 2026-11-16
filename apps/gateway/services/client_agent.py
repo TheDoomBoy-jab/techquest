@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from .dose_policy import check_dose_policy, enforce_specialist_dose
 from .io_trace import record_trace
 from .llm_client import call_llm, parse_json_response
 
@@ -194,6 +195,8 @@ async def _call_a2a_timed(
     started = time.perf_counter()
     try:
         result = await asyncio.to_thread(_route_a2a_sync, payload, request_id)
+        if payload.get("agent-task") in {"compliance", "safety", "financial"} and isinstance(result, dict):
+            result = enforce_specialist_dose(payload["agent-task"], result, payload.get("recent_action", {}))
         latency = round((time.perf_counter() - started) * 1000)
         if on_complete and agent_name:
             await on_complete(agent_name, result, latency)
@@ -390,26 +393,17 @@ def evaluate_rag_rules(patient: dict, trial_id: str, prescribed_action: str) -> 
     crcl = labs.get("creatinine_clearance")
     crcl_val = crcl.get("value") if isinstance(crcl, dict) else crcl
 
-    # 1. Overdose / Protocol Dosing Window
-    if any(k in action_str for k in ["40 mg", "40mg", "60 mg", "60mg", "20 mg", "20mg"]):
+    # Numeric comparison uses the selected drug, units, route and frequency.
+    dose_check = check_dose_policy(prescribed_action)
+    if dose_check["status"] == "EXCEEDS_LIMIT":
         violations.append({
-            "rule_id": f"{trial_id}_DOSE_LIMIT",
+            "rule_id": f"{trial_id}_DOSE_POLICY",
             "parameter": "Dosage Window",
             "observed": prescribed_action,
-            "limit": "Apixaban 5 mg oral twice daily (or 2.5 mg BID for renal dose)",
-            "difference": "Overdose (+35 mg BID beyond approved 5 mg BID maximum)",
-            "reference": f"{trial_id}-dosing-002: Arm A Standard Protocol",
-            "reason": f"Prescribed action ({prescribed_action}) violates the protocol-specified therapeutic dosage limit.",
-        })
-    elif any(k in action_str for k in ["400 mg", "400mg"]):
-        violations.append({
-            "rule_id": f"{trial_id}_ONCOLOGY_DOSE_LIMIT",
-            "parameter": "Biologic Immunotherapy Dosage",
-            "observed": prescribed_action,
-            "limit": "Pembrolizumab 200 mg IV every 3 weeks",
-            "difference": "Overdose (+200 mg Q3W beyond protocol specification)",
-            "reference": f"{trial_id}-dosing-001: Cohort C Oncology Protocol",
-            "reason": f"Prescribed dose ({prescribed_action}) exceeds protocol ceiling of 200 mg Q3W.",
+            "limit": f"<= {dose_check.get('max_mg')} mg" if dose_check["status"] == "EXCEEDS_LIMIT" else "Verified demo dose rule required",
+            "difference": f"+{dose_check['dose_mg'] - dose_check['max_mg']:g} mg" if dose_check["status"] == "EXCEEDS_LIMIT" else "Unverified regimen",
+            "reference": "Configured demo formulary dose-policy.json",
+            "reason": dose_check["reason"],
         })
 
     # 2. Bleeding Washout Violation
@@ -449,14 +443,16 @@ def evaluate_rag_rules(patient: dict, trial_id: str, prescribed_action: str) -> 
             "reason": "Active autoimmune disorder requiring systemic immunosuppressive therapy within 2 years excludes participation.",
         })
 
-    is_compliant = len(violations) == 0
+    is_compliant = len(violations) == 0 and dose_check["status"] == "WITHIN_LIMIT"
+    unverified_dose = not violations and dose_check["status"] == "UNVERIFIED"
     return {
         "compliant": is_compliant,
-        "status": "COMPLIANT" if is_compliant else "NON_COMPLIANT",
+        "status": "UNKNOWN" if unverified_dose else "COMPLIANT" if is_compliant else "NON_COMPLIANT",
         "violations": violations,
         "reason": (
             "Proposed intervention and patient clinical parameters conform to all trial protocol and RAG rule specifications."
             if is_compliant
+            else dose_check["reason"] if unverified_dose
             else f"{len(violations)} trial protocol eligibility and dosing rule violation(s) identified against {trial_id}."
         ),
     }
@@ -473,7 +469,7 @@ def evaluate_a2a_discrepancies(
     """Consensus matrix reconciling 4 specialist agent outputs with guardrails."""
     comp_status = compliance.get("compliance_status", "UNKNOWN")
     safe_status = safety.get("safety_status", "NEEDS_REVIEW")
-    cov_status = financial.get("coverage_status", "COVERED")
+    cov_status = financial.get("coverage_status", "UNKNOWN")
 
     reasons = {}
     dissenting = []
@@ -659,28 +655,8 @@ async def run(
     if isinstance(safety, Exception):
         safety = {"safety_status": "NEEDS_REVIEW", "concerns": [], "explanation": f"Safety evaluation note: {safety}", "confidence": 0.5}
     if isinstance(financial, Exception):
-        action_str = str(recent_action).lower()
-        is_high_dose = any(term in action_str for term in ["40 mg", "40mg", "20 mg", "20mg", "overdose", "escalat"])
-        if is_high_dose:
-            financial = {
-                "patientId": patient_id,
-                "coverage_status": "REQUIRES_PRE_AUTH",
-                "tier": "Non-Covered Protocol Deviation / Prior Auth Required",
-                "financialExposure": 3200,
-                "callout": "Sponsor coverage denied: 40 mg BID violates protocol. Prior auth required; estimated exposure: $3,200.",
-                "explanation": "Sponsor CTA reimbursement denied for non-compliant 40 mg dose. Prior authorization required.",
-                "confidence": 0.95,
-            }
-        else:
-            financial = {
-                "patientId": patient_id,
-                "coverage_status": "COVERED",
-                "tier": "Tier-1 Protocol Coverage",
-                "financialExposure": 0,
-                "callout": "100% Protocol & Investigational Coverage under Sponsor Trial Agreement (Zero Patient Liability).",
-                "explanation": "Clinical trial protocol coverage verified under research billing agreement.",
-                "confidence": 0.95,
-            }
+        financial = {"patientId": patient_id, "coverage_status": "UNKNOWN", "needs_human_review": True,
+                     "callout": "Financial review was unavailable.", "explanation": "Coverage has not been verified.", "confidence": 0.0}
 
     trial_id_val = rag_output.get("trial_id", "NCT02415400")
     resupply_attempts = int(rag_output.get("resupply_attempts", 0) or 0)
@@ -769,7 +745,7 @@ async def run(
             "explanation": "Clinical research agreement explicitly excludes reimbursement when study drug is administered during acute organ injury contraindications.",
             "confidence": 0.99,
         }
-    elif not rag_rules["compliant"]:
+    elif not rag_rules["compliant"] and rag_rules["violations"]:
         compliance = {
             "compliance_status": "NON_COMPLIANT",
             "valid": False,
@@ -808,205 +784,12 @@ async def run(
             "explanation": "Sponsor CTA reimbursement denied for non-compliant trial protocol deviation and contraindication.",
             "confidence": 0.95,
         }
-    elif patient_id == "P037":
-        compliance = {
-            "compliance_status": "NON_COMPLIANT",
-            "valid": False,
-            "violations": [
-                {
-                    "parameter": "Biologic Dosage Schedule",
-                    "observed": "400 mg IV Q3W",
-                    "expected": "200 mg IV Q3W",
-                    "protocol_text": "NCT02415400 Cohort C Solid Tumor Protocol",
-                    "reason": "Dose of 400 mg IV Q3W is an unapproved 100% dose escalation above approved trial protocol.",
-                }
-            ],
-            "explanation": "Prescribed dose of 400 mg Q3W represents an unapproved 100% dose escalation exceeding trial protocol specifications.",
-            "confidence": 0.97,
-        }
-        safety = {
-            "safety_status": "UNSAFE",
-            "safe": False,
-            "concerns": [
-                {
-                    "parameter": "Immune Colitis & CYP3A4 DDI",
-                    "observed": "Grade 3 Colitis + Ketoconazole + ANC 1200/uL",
-                    "limit": "No active colitis, ANC >= 1500/uL",
-                    "reason": "Severe immune-mediated colitis flare combined with bone marrow suppression (ANC 1,200/uL, Platelets 85,000/uL) and CYP3A4 interaction with Ketoconazole contraindicates immunotherapy.",
-                }
-            ],
-            "explanation": "Severe clinical safety hazard: Patient has active Grade 3 immune-related colitis on systemic corticosteroids, concurrent bone marrow suppression, and profound CYP3A4 interaction.",
-            "confidence": 0.96,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "NOT_COVERED",
-            "tier": "Sponsor Denial - Off-Label Biologic Escalation",
-            "financialExposure": 48500,
-            "callout": "Sponsor CTA coverage denied: 400 mg Q3W is an unapproved biologic escalation. Patient out-of-pocket exposure: $48,500.",
-            "explanation": "Specialty Biologics Clinical Trial Grant denies coverage for unapproved dose escalations. Estimated patient liability: $48,500.",
-            "confidence": 0.98,
-        }
-    elif patient_id == "P048":
-        compliance = {
-            "compliance_status": "COMPLIANT",
-            "valid": True,
-            "violations": [],
-            "explanation": "Prescribed dose of Apixaban 5 mg BID conforms to protocol Arm A criteria.",
-            "confidence": 0.98,
-        }
-        safety = {
-            "safety_status": "UNSAFE",
-            "safe": False,
-            "concerns": [
-                {
-                    "parameter": "Dual Strong CYP3A4 & P-gp Interaction",
-                    "observed": "Apixaban + Ketoconazole 400mg + Clarithromycin 500mg",
-                    "limit": "Avoid concomitant strong dual CYP3A4 and P-gp inhibitors",
-                    "reason": "Concomitant administration of strong dual CYP3A4 and P-gp inhibitors increases Apixaban exposure by >300%, creating severe life-threatening hemorrhage risk.",
-                }
-            ],
-            "explanation": "Fatal pharmacokinetic drug-drug interaction: Ketoconazole and Clarithromycin severely inhibit Apixaban elimination. Anticoagulation therapy is contraindicated.",
-            "confidence": 0.99,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "COVERED",
-            "tier": "Tier-1 Protocol Coverage",
-            "financialExposure": 0,
-            "callout": "100% Protocol & Investigational Coverage under Sponsor Trial Agreement.",
-            "explanation": "Formulary research coverage active.",
-            "confidence": 0.95,
-        }
-    elif patient_id == "P049":
-        compliance = {
-            "compliance_status": "COMPLIANT",
-            "valid": True,
-            "violations": [],
-            "explanation": "Biologic dosing schedule conforms to standard protocol interval.",
-            "confidence": 0.95,
-        }
-        safety = {
-            "safety_status": "SAFE",
-            "safe": True,
-            "concerns": [],
-            "explanation": "Adequate baseline organ clearance and hematologic reserve.",
-            "confidence": 0.92,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "NOT_COVERED",
-            "tier": "Sponsor Exclusion - Exploratory Off-Label Indication",
-            "financialExposure": 52800,
-            "callout": "Sponsor CTA reimbursement denied: Refractory leiomyosarcoma is not an approved trial indication. Patient liability: $52,800.",
-            "explanation": "Exploratory off-label indication is not covered under the investigational protocol agreement. Prior authorization denied.",
-            "confidence": 0.98,
-        }
-    elif patient_id == "P050":
-        compliance = {
-            "compliance_status": "COMPLIANT",
-            "valid": True,
-            "violations": [],
-            "explanation": "Anticoagulation schedule evaluated post-PCI.",
-            "confidence": 0.90,
-        }
-        safety = {
-            "safety_status": "UNSAFE",
-            "safe": False,
-            "concerns": [
-                {
-                    "parameter": "Triple Antiplatelet + Anticoagulant Hemorrhage Hazard",
-                    "observed": "Apixaban + Aspirin + Clopidogrel + Ticagrelor",
-                    "limit": "Dual antiplatelet therapy maximum; avoid quadruple antithrombotic therapy",
-                    "reason": "Simultaneous administration of triple antiplatelet therapy and full-dose oral anticoagulation creates an unacceptable risk of fatal major bleeding.",
-                }
-            ],
-            "explanation": "Severe hemorrhagic hazard: Concurrent quadruple antithrombotic regimen (Apixaban + Aspirin + Clopidogrel + Ticagrelor) is contraindicated.",
-            "confidence": 0.97,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "REQUIRES_PRE_AUTH",
-            "tier": "Non-Standard Combination / Specialty Prior Auth Required",
-            "financialExposure": 6400,
-            "callout": "Sponsor denies coverage for non-protocol quadruple antithrombotic combination. Estimated patient exposure: $6,400.",
-            "explanation": "Non-standard antiplatelet combination requires secondary prior authorization.",
-            "confidence": 0.94,
-        }
-    is_p001_p032 = bool(
-        isinstance(patient_id, str)
-        and patient_id.startswith("P0")
-        and len(patient_id) == 4
-        and patient_id[1:].isdigit()
-        and 1 <= int(patient_id[1:]) <= 32
-    )
-
-    action_lower = current_action.lower()
-    has_overdose = any(k in action_lower for k in ["40 mg", "40mg", "60 mg", "60mg", "20 mg", "20mg", "400 mg", "400mg"])
-
-    if (patient_id in {"P036", "P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
-        compliance = {
-            "compliance_status": "COMPLIANT",
-            "valid": True,
-            "violations": [],
-            "explanation": "Intervention fully conforms to approved trial protocol dosing and inclusion/exclusion specifications.",
-            "confidence": 0.98,
-        }
-        safety = {
-            "safety_status": "SAFE",
-            "safe": True,
-            "concerns": [],
-            "explanation": "All baseline physiological organ clearance, hematologic reserve, and metabolic parameters safely support investigational administration with routine surveillance.",
-            "confidence": 0.96,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "COVERED",
-            "tier": "Tier-1 Protocol Coverage",
-            "financialExposure": 0,
-            "callout": "100% Protocol & Investigational Coverage under Sponsor Trial Agreement (Zero Patient Liability).",
-            "explanation": "Clinical trial protocol coverage verified under research billing agreement.",
-            "confidence": 0.98,
-        }
-    elif has_overdose:
-        compliance = {
-            "compliance_status": "NON_COMPLIANT",
-            "valid": False,
-            "violations": [
-                {
-                    "parameter": "Supratherapeutic Overdose",
-                    "observed": current_action,
-                    "expected": "Standard protocol therapeutic dosage ceiling",
-                    "protocol_text": "Protocol Dosing Specifications",
-                    "reason": f"Modified prescribed dosage ({current_action}) exceeds protocol-approved safety ceiling.",
-                }
-            ],
-            "explanation": f"Prescribed dose ({current_action}) represents a supratherapeutic overdose exceeding protocol specifications.",
-            "confidence": 0.98,
-        }
-        safety = {
-            "safety_status": "UNSAFE",
-            "safe": False,
-            "concerns": [
-                {
-                    "parameter": "Dose-Dependent Toxicity Hazard",
-                    "observed": current_action,
-                    "limit": "Approved protocol ceiling",
-                    "reason": "Supratherapeutic drug exposure increases risk of life-threatening organ toxicity and hemorrhagic events.",
-                }
-            ],
-            "explanation": "Severe toxicity risk: Supratherapeutic dosing regimen causes excessive systemic drug exposure.",
-            "confidence": 0.95,
-        }
-        financial = {
-            "patientId": patient_id,
-            "coverage_status": "NOT_COVERED",
-            "tier": "Non-Formulary Dosing Escalation",
-            "financialExposure": 12500,
-            "callout": "Sponsor reimbursement denied for non-protocol supratherapeutic dosage.",
-            "explanation": "Non-standard dose escalation requires secondary prior authorization.",
-            "confidence": 0.92,
-        }
+    # Patient identifiers never determine an assessment. Apply the boundary
+    # after all specialist processing so optimistic model results cannot bypass it.
+    dose_check = check_dose_policy(current_action)
+    compliance = enforce_specialist_dose("compliance", compliance, current_action)
+    safety = enforce_specialist_dose("safety", safety, current_action)
+    financial = enforce_specialist_dose("financial", financial, current_action)
 
     iteration = rag_output.get("refinement_iteration_count", 0)
     current_history = [
@@ -1035,7 +818,7 @@ async def run(
             "final_verdict": "NOT_JUSTIFIED",
             "summary": f"Adjudication NOT JUSTIFIED: Guardrail-2 Catastrophic Hard Boundary breached. {guardrail_2['reason']}",
         }
-    elif not rag_rules["compliant"] or compliance.get("compliance_status") == "NON_COMPLIANT":
+    elif rag_rules["violations"] or compliance.get("compliance_status") == "NON_COMPLIANT":
         synthesis = {
             "final_verdict": "NOT_JUSTIFIED",
             "summary": f"Adjudication NOT JUSTIFIED: Protocol and RAG rule non-compliance detected ({rag_rules['violations'][0]['reason'] if rag_rules.get('violations') else compliance.get('explanation')}).",
@@ -1045,41 +828,17 @@ async def run(
             "final_verdict": "NOT_JUSTIFIED",
             "summary": f"Adjudication NOT JUSTIFIED due to Safety & Toxicity Agent dissent: {safety.get('explanation')}",
         }
-    elif patient_id == "P037" and not (extracted_modifications or "200 mg" in action_lower):
-        synthesis = {
-            "final_verdict": "NOT_JUSTIFIED",
-            "summary": "Adjudication NOT JUSTIFIED based on unanimous multi-agent rejection across all 4 specialist vectors. Protocol Compliance flags unapproved 400 mg Q3W dosing, Safety identifies acute immune colitis and myelosuppression, and Financial projects $48,500 in non-covered exposure.",
-        }
-    elif patient_id == "P048":
-        synthesis = {
-            "final_verdict": "NOT_JUSTIFIED",
-            "summary": "Adjudication NOT JUSTIFIED due to Safety & Toxicity Agent dissent: Severe life-threatening pharmacokinetic drug interaction between Apixaban and strong dual CYP3A4/P-gp inhibitors (Ketoconazole and Clarithromycin).",
-        }
-    elif patient_id == "P049":
-        synthesis = {
-            "final_verdict": "NOT_JUSTIFIED",
-            "summary": "Adjudication NOT JUSTIFIED due to Financial Risk Agent dissent: Exploratory off-label indication is not covered under the sponsor trial agreement, incurring $52,800 in unapproved patient liability.",
-        }
-    elif patient_id == "P050":
-        synthesis = {
-            "final_verdict": "NOT_JUSTIFIED",
-            "summary": "Adjudication NOT JUSTIFIED due to multi-agent dissent: Safety Agent identifies unacceptable major hemorrhage risk from quadruple antithrombotic therapy, and Financial Agent projects $6,400 in non-covered exposure.",
-        }
-    elif (patient_id in {"P036", "P051", "P052", "P053", "P054"} or is_p001_p032) and not has_overdose:
-        synthesis = {
-            "final_verdict": "JUSTIFIED",
-            "summary": "Unanimous multi-agent consensus achieved. Protocol Compliance, Safety & Toxicity, and Financial Risk specialists all recommend proceeding. 100% sponsor trial coverage ($0 liability).",
-        }
-    elif extracted_modifications and compliance.get("compliance_status") == "COMPLIANT" and safety.get("safety_status") == "SAFE":
-        synthesis = {
-            "final_verdict": "JUSTIFIED",
-            "summary": f"Clinician modification verified: Order titrated to protocol-compliant regimen ({_modification_text(extracted_modifications)}). Consensus achieved.",
-        }
+    elif dose_check["status"] == "UNVERIFIED":
+        synthesis = {"final_verdict": "NEEDS_REVIEW", "summary": dose_check["reason"]}
     elif isinstance(synthesis, Exception) or compliance.get("compliance_status") != "COMPLIANT" or safety.get("safety_status") != "SAFE" or financial.get("coverage_status") != "COVERED":
         synthesis = {
             "final_verdict": "NOT_JUSTIFIED" if (compliance.get("compliance_status") == "NON_COMPLIANT" or safety.get("safety_status") == "UNSAFE") else "NEEDS_REVIEW",
             "summary": "Multi-agent clinical review completed. Adjudication non-aligned based on specialist findings.",
         }
+
+    # All positive specialist results are required even if a reducer model says yes.
+    if synthesis.get("final_verdict") == "JUSTIFIED" and (compliance.get("compliance_status") != "COMPLIANT" or safety.get("safety_status") != "SAFE" or financial.get("coverage_status") != "COVERED"):
+        synthesis = {"final_verdict": "NEEDS_REVIEW", "summary": "Specialist review is incomplete or non-aligned."}
 
     arbitration_confidence = 0.95 if synthesis.get("final_verdict") == "JUSTIFIED" else 0.90
     current_history.append({
@@ -1116,6 +875,7 @@ async def run(
         "trial_id": rag_output.get("trial_id"),
         "prescribed_action": current_action,
         "recent_action": recent_action,
+        "dose_policy_result": dose_check,
         "protocol_compliance_result": compliance,
         "safety_result": safety,
         "financial_result": financial,

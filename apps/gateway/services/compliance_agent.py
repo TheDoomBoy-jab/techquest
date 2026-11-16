@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .llm_client import call_llm, parse_json_response
+from .dose_policy import check_dose_policy, enforce_specialist_dose
 
 
 def evaluate(
@@ -31,8 +32,9 @@ RECENT ACTION: {json.dumps(recent_action, indent=2)}
 MODIFICATION: {modification or '(none)'}
 RELEVANT PROTOCOLS: {json.dumps(protocol_chunks, indent=2)}
 REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
-    action_str = str(recent_action).lower()
-    is_high_dose = any(term in action_str for term in ["40 mg", "40mg", "60 mg", "60mg", "20 mg", "20mg", "overdose", "50 mg", "400 mg"])
+    dose_check = check_dose_policy(recent_action)
+    if dose_check["status"] != "WITHIN_LIMIT":
+        return enforce_specialist_dose("compliance", {}, recent_action)
     source_title = f"ClinicalTrials.gov Protocol {trial_id}"
     protocol_text_ref = (
         protocol_chunks[0].get("text")
@@ -43,38 +45,18 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
     try:
         result = parse_json_response(call_llm(prompt, max_tokens=600))
     except Exception:
-        if is_high_dose:
-            observed_dose = recent_action.get("dosage", "40 mg") if isinstance(recent_action, dict) else "40 mg"
-            return {
-                "trial_id": trial_id,
-                "valid": False,
-                "compliance_status": "NON_COMPLIANT",
-                "violations": [
-                    {
-                        "parameter": "dosage",
-                        "observed": str(observed_dose),
-                        "expected": "Standard protocol dose",
-                        "protocol_text": protocol_text_ref,
-                        "reason": f"Administered dose of {observed_dose} exceeds approved {trial_id} protocol dosing limit.",
-                    }
-                ],
-                "sources": [source_title],
-                "needs_human_review": True,
-                "explanation": f"Administered dose of {observed_dose} is a clear protocol deviation from standard {trial_id} dosing criteria.",
-                "confidence": 0.95,
-            }
         return {
             "trial_id": trial_id,
-            "valid": True,
-            "compliance_status": "COMPLIANT",
+            "valid": False,
+            "compliance_status": "UNKNOWN",
             "violations": [],
             "sources": [source_title],
-            "needs_human_review": False,
-            "explanation": f"Intervention complies with protocol {trial_id} standard trial inclusion criteria.",
-            "confidence": 0.90,
+            "needs_human_review": True,
+            "explanation": "Protocol review was unavailable. A dose boundary check alone does not establish compliance.",
+            "confidence": 0.0,
         }
 
-    status = str(result.get("compliance_status", "COMPLIANT")).upper()
+    status = str(result.get("compliance_status", "UNKNOWN")).upper()
     violations = result.get("violations", [])
     if not isinstance(violations, list):
         violations = [violations] if violations else []
@@ -83,22 +65,9 @@ REPORT HISTORY: {json.dumps(report_history, indent=2)}"""
     if not isinstance(sources, list) or not sources:
         sources = [source_title]
 
-    if is_high_dose:
-        status = "NON_COMPLIANT"
-        observed_dose = recent_action.get("dosage", "40 mg") if isinstance(recent_action, dict) else "40 mg"
-        if not violations:
-            violations.append({
-                "parameter": "dosage",
-                "observed": str(observed_dose),
-                "expected": "Standard protocol dose",
-                "protocol_text": protocol_text_ref,
-                "reason": f"Administered dose of {observed_dose} exceeds protocol-mandated {trial_id} limit.",
-            })
-        explanation = f"Administered dose of {observed_dose} is a clear protocol deviation from approved {trial_id} dosing criteria."
-    else:
-        if status not in {"COMPLIANT", "NON_COMPLIANT", "UNKNOWN"}:
-            status = "COMPLIANT" if result.get("valid") is True else "NON_COMPLIANT"
-        explanation = str(result.get("explanation") or f"Intervention complies with protocol {trial_id} standard criteria.")
+    if status not in {"COMPLIANT", "NON_COMPLIANT", "UNKNOWN"}:
+        status = "UNKNOWN"
+    explanation = str(result.get("explanation") or f"Intervention complies with protocol {trial_id} standard criteria.")
 
     result["trial_id"] = str(result.get("trial_id") or trial_id)
     result["valid"] = status == "COMPLIANT"

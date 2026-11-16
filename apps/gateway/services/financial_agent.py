@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .llm_client import call_llm, parse_json_response
+from .dose_policy import check_dose_policy, enforce_specialist_dose
 
 
 DRUG_FINANCIAL_PROFILES = {
@@ -65,6 +66,9 @@ def evaluate(
     report_history: list[dict] | None = None,
     modification: str = "",
 ) -> dict:
+    dose_check = check_dose_policy(recent_action)
+    if dose_check["status"] != "WITHIN_LIMIT":
+        return enforce_specialist_dose("financial", {}, recent_action)
     action_text = json.dumps(recent_action) if isinstance(recent_action, dict) else str(recent_action)
     action_str = action_text.lower()
     dosage_str = str(recent_action.get("dosage", "")).lower() if isinstance(recent_action, dict) else action_str
@@ -77,12 +81,12 @@ def evaluate(
     unapproved_exposure = profile["unapproved_exposure"]
 
     # Check for unapproved dose or unauthorized escalation
-    is_unapproved_dose = any(
-        term in dosage_str or term in action_str
-        for term in ["40 mg", "40mg", "60 mg", "60mg", "overdose", "escalat", "unapproved", "8x"]
-    )
+    is_unapproved_dose = dose_check["status"] != "WITHIN_LIMIT"
     # Check if standard therapeutic dosage is confirmed
-    is_standard_dose = any(ad in dosage_str or ad in action_str for ad in profile["allowed_doses"]) and not is_unapproved_dose
+    is_standard_dose = any(
+        check_dose_policy({**recent_action, "dosage": allowed.split(" Q")[0]}).get("dose_mg") == dose_check.get("dose_mg")
+        for allowed in profile["allowed_doses"]
+    )
 
     ctx = financial_context or {
         "coverage_plan": profile["coverage_plan"],
@@ -165,9 +169,9 @@ REPORT HISTORY: {json.dumps(report_history or [], indent=2)}"""
         pre_auth = False
         sponsor_eligible = True
     else:
-        status = raw_result.get("coverage_status", "COVERED")
+        status = raw_result.get("coverage_status", "REQUIRES_PRE_AUTH")
         if status not in {"COVERED", "NOT_COVERED", "REQUIRES_PRE_AUTH"}:
-            status = "COVERED"
+            status = "REQUIRES_PRE_AUTH"
         exposure = raw_result.get("estimated_exposure", 0 if status == "COVERED" else unapproved_exposure)
         pre_auth = bool(raw_result.get("pre_auth_required", status == "REQUIRES_PRE_AUTH"))
         sponsor_eligible = bool(raw_result.get("sponsor_billing_eligible", status == "COVERED"))
