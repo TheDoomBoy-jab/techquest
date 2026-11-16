@@ -57,3 +57,7 @@ git diff --check
 ```
 
 Deploy the gateway changes before enabling confirmed saves in the frontend. Check that its capability response contains `confirmed_prescription_updates: true` and `persistence: "supabase_verified"`. After restoring Supabase, verify a confirmed change against the persisted row and after a process restart before claiming live durability.
+
+### pnpm install on Vercel
+
+The first confirmation-dialog deployment failed during dependency installation with `ERR_PNPM_IGNORED_BUILDS` for `esbuild@0.28.2`. `pnpm-workspace.yaml` now explicitly approves that exact version's install script using `allowBuilds`. A temporary checkout reproduced the failure without the approval, then installed successfully with it and compiled TypeScript through esbuild. Dependency script checks remain enabled.
