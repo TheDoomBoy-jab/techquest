@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { getGatewayUrl } from "@/lib/api-config"
-import { targetDose, matchesTargetDose, matchesPrescriptionAction, postDecision } from "@/lib/prescription"
+import { targetDose, matchesTargetDose, matchesPrescriptionAction, postDecision, savePatientChange } from "@/lib/prescription"
 import { PATIENTS } from "@/lib/clinical-data"
 
 export async function getPatientsFromSupabase() {
@@ -188,18 +188,6 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
           const matchesRequestedAction = !overrideAction ||
             matchesPrescriptionAction(pkg?.prescribed_action, overrideAction)
           if (matchesRequestedAction && pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
-            if (demoOverride) {
-              if (pkg.patient_profile) {
-                if (demoOverride.age) pkg.patient_profile.age = demoOverride.age
-                if (demoOverride.sex) pkg.patient_profile.sex = demoOverride.sex
-              }
-              if (pkg.guardrail_1_result) {
-                pkg.guardrail_1_result.passed = true
-                pkg.guardrail_1_result.status = "PASSED"
-                pkg.guardrail_1_result.missing_fields = []
-                pkg.guardrail_1_result.resupply_attempts = Math.max(pkg.guardrail_1_result.resupply_attempts || 0, 1)
-              }
-            }
             return pkg
           }
         }
@@ -986,196 +974,18 @@ export async function updateFhirDatabase(
     timing_schedule: string
     doctor_note?: string
     target_fhir_field?: string
-  }
+  },
+  confirmed: boolean = false,
 ) {
-  const {
-    standardized_action,
-    standardized_drug,
-    dosage,
-    dosage_unit,
-    route,
-    frequency,
-    timing_schedule,
-    doctor_note,
-  } = prescriptionDetails
-
-  // 1. Cache action override in memory
-  patientActionOverrides.set(patientId, standardized_action)
-
-  // 2. Update in-memory PATIENTS array
-  const pat = PATIENTS.find((p) => p.id === patientId)
-  if (pat) {
-    pat.action = standardized_action
-    if (!pat.clinical_data) pat.clinical_data = {}
-    pat.clinical_data.prescribed_action = standardized_action
-
-    const freqAbbr =
-      frequency.toLowerCase().includes("twice") || frequency.toLowerCase().includes("bid")
-        ? "BID"
-        : frequency.toLowerCase().includes("3 weeks") || frequency.toLowerCase().includes("q3w")
-          ? "IV Q3W"
-          : "daily"
-    const newMedStr = `${standardized_drug} ${dosage}${dosage_unit} ${freqAbbr}`
-
-    const existingMeds = Array.isArray(pat.medications) ? [...pat.medications] : []
-    const drugPattern = new RegExp(standardized_drug, "i")
-    const replaced = existingMeds.map((m) => (drugPattern.test(m) ? newMedStr : m))
-    if (!replaced.some((m) => drugPattern.test(m))) {
-      replaced.unshift(newMedStr)
-    }
-    pat.medications = replaced
-    pat.clinical_data.medications = replaced
-
-    pat.clinical_data.dosage_instructions = {
-      dose: Number(dosage) || dosage,
-      unit: dosage_unit,
-      frequency: frequency,
-      timing_schedule: timing_schedule,
-      route: route,
-      last_modified_by: "Attending Clinician (HITL Override)",
-      last_modified_timestamp: new Date().toISOString(),
-      clinical_rationale: doctor_note || "Titrated to protocol-compliant dosage ceiling.",
-      fhir_field_updated: "MedicationRequest.dosageInstruction[0]",
-    }
-
-    pat.clinical_data.fhir_medication_request = {
-      resourceType: "MedicationRequest",
-      id: `medrx-${patientId}-${Date.now()}`,
-      status: "active",
-      intent: "order",
-      medicationCodeableConcept: {
-        text: standardized_action,
-        coding: [{ display: standardized_drug }],
-      },
-      dosageInstruction: [
-        {
-          text: standardized_action,
-          route: { text: route },
-          doseAndRate: [{ doseQuantity: { value: Number(dosage) || dosage, unit: dosage_unit } }],
-          timing: {
-            repeat: {
-              frequency: frequency.toLowerCase().includes("twice") ? 2 : 1,
-              period: 1,
-              periodUnit: "d",
-              timeOfDay: [timing_schedule],
-            },
-          },
-        },
-      ],
-      note: [{ text: doctor_note || "Physician override", time: new Date().toISOString() }],
-    }
-  }
-
-  // 3. Update disk JSON files if accessible (local node environment)
   try {
-    const fs = await import("fs")
-    const path = await import("path")
-    const candidatePaths = [
-      path.resolve(process.cwd(), "packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
-      path.resolve(process.cwd(), "services/rag_service/data/mock_fhir/patients_expanded.json"),
-      path.resolve(process.cwd(), "../packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
-      path.resolve(process.cwd(), "../services/rag_service/data/mock_fhir/patients_expanded.json"),
-    ]
-
-    for (const p of candidatePaths) {
-      if (fs.existsSync(p)) {
-        try {
-          const raw = fs.readFileSync(p, "utf-8")
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed.patients)) {
-            let found = false
-            for (const item of parsed.patients) {
-              const pid = item.patient_id || item.patient?.patient_id
-              if (pid === patientId) {
-                found = true
-                item.default_prescribed_action = standardized_action
-                if (item.patient) {
-                  item.patient.default_prescribed_action = standardized_action
-                  const freqAbbr = frequency.toLowerCase().includes("twice") ? "BID" : "daily"
-                  const newMedStr = `${standardized_drug} ${dosage}${dosage_unit} ${freqAbbr}`
-                  if (Array.isArray(item.patient.medications)) {
-                    const dRegex = new RegExp(standardized_drug, "i")
-                    item.patient.medications = item.patient.medications.map((m: string) =>
-                      dRegex.test(m) ? newMedStr : m
-                    )
-                  }
-                  if (!item.patient.dosage_instructions) item.patient.dosage_instructions = {}
-                  item.patient.dosage_instructions = {
-                    dose: Number(dosage) || dosage,
-                    unit: dosage_unit,
-                    frequency: frequency,
-                    timing_schedule: timing_schedule,
-                    route: route,
-                    last_modified_timestamp: new Date().toISOString(),
-                  }
-                }
-                break
-              }
-            }
-            if (found) {
-              fs.writeFileSync(p, JSON.stringify(parsed, null, 2), "utf-8")
-            }
-          }
-        } catch {
-          // ignore on read-only environments
-        }
-      }
-    }
-  } catch {
-    // ignore on platforms without node fs access
+    const result = await savePatientChange(getGatewayUrl(), "/api/fhir/update", {
+      patientId, ...prescriptionDetails, confirmed,
+    }, patientId, prescriptionDetails.standardized_action)
+    patientActionOverrides.set(patientId, result.prescribed_action)
+    return { success: true, patientId, standardized_action: result.prescribed_action, persistence: result.persistence }
+  } catch (error) {
+    return { success: false, patientId, error: error instanceof Error ? error.message : "The database save could not be confirmed." }
   }
-
-  // 4. Update FastAPI Gateway in-memory cache and persistence if reachable
-  try {
-    const baseUrl = getGatewayUrl()
-    if (baseUrl) {
-      const controller = new AbortController()
-      const t = setTimeout(() => controller.abort(), 3000)
-      await fetch(`${baseUrl}/api/fhir/update`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId,
-          standardized_action,
-          standardized_drug,
-          dosage,
-          dosage_unit,
-          route,
-          frequency,
-          timing_schedule,
-          doctor_note,
-        }),
-        signal: controller.signal,
-      })
-      clearTimeout(t)
-    }
-  } catch {
-    // transient network error; local and disk updates remain valid
-  }
-
-  // 5. Update Supabase if configured
-  try {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (url && key) {
-      const supabase = createClient(url, key)
-      const updateData: Record<string, any> = {
-        prescribed_action: standardized_action,
-        updated_at: new Date().toISOString(),
-      }
-      if (pat?.clinical_data) {
-        updateData.clinical_data = pat.clinical_data
-      }
-      await supabase
-        .from("patients")
-        .update(updateData)
-        .eq("patient_id", patientId)
-    }
-  } catch {
-    // transient supabase error ignored
-  }
-
-  return { success: true, patientId, standardized_action }
 }
 
 export async function submitDecision(
@@ -1183,7 +993,8 @@ export async function submitDecision(
   decision: "accept" | "reject" | "override", 
   justification?: string,
   modifications?: any[],
-  fullExtractionResult?: any
+  fullExtractionResult?: any,
+  confirmed: boolean = false,
 ) {
   let standardizedAction = ""
   if (decision === "override") {
@@ -1192,18 +1003,21 @@ export async function submitDecision(
     } else if (Array.isArray(modifications) && modifications.length > 0) {
       const mod = modifications[0]
       if (mod?.dosage_name && mod?.proposed_dosage) {
-        standardizedAction = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit || "mg"} ${mod.route || "oral"} ${mod.frequency || "twice daily"}`
+        if ([mod.dosage_unit, mod.route, mod.frequency].every((field) => typeof field === "string" && field.trim())) {
+          standardizedAction = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit} ${mod.route} ${mod.frequency}`
+        }
       }
     }
 
     if (!standardizedAction || fullExtractionResult?.is_valid === false || fullExtractionResult?.is_appropriate === false) {
-      throw new Error("A valid extracted prescription is required before modifying the order.")
+      return { status: "error", decision, patientId, error: "A valid extracted prescription is required before modifying the order." }
     }
   }
 
   const payload = {
     patientId,
     decision,
+    confirmed,
     timestamp: new Date().toISOString(),
     justification: justification || null,
     modifications: modifications || [],
@@ -1216,8 +1030,18 @@ export async function submitDecision(
     ? `${baseUrl}/api/orchestrator/resume`     
     : `${baseUrl}/api/orchestrator/checkpoint`
 
+  if (decision === "override") {
+    try {
+      const result = await savePatientChange(baseUrl, "/api/orchestrator/resume", payload, patientId, standardizedAction)
+      patientActionOverrides.set(patientId, result.prescribed_action)
+      return { status: "restarting", decision, patientId, prescribed_action: result.prescribed_action, persistence: result.persistence }
+    } catch (error) {
+      // Expected save failures must survive production Server Action error redaction.
+      return { status: "error", decision, patientId, error: error instanceof Error ? error.message : "The database save could not be confirmed." }
+    }
+  }
   await postDecision(endpoint, payload)
-  return { status: decision === "override" ? "restarting" : "success", decision, patientId }
+  return { status: "success", decision, patientId }
 
 }
 
@@ -1226,147 +1050,31 @@ export async function resupplyPatientData(
   resupplied: { age?: number | string | null; sex?: string | null },
   attemptNumber: number = 1,
   maxIters: number = 3,
-  justification?: string
+  justification?: string,
 ) {
-  // 1. Parse resupplied values
-  let parsedAge: number | null = null
-  if (resupplied.age !== undefined && resupplied.age !== null && String(resupplied.age).trim() !== "") {
-    const n = Number(resupplied.age)
-    if (!isNaN(n) && n > 0) parsedAge = n
-  }
-  let parsedSex: string | null = null
-  if (resupplied.sex && String(resupplied.sex).trim() !== "") {
-    const s = String(resupplied.sex).trim().toLowerCase()
-    parsedSex = s.startsWith("f") ? "F" : s.startsWith("m") ? "M" : s
-  }
-
-  // 2. Cache demographic override in memory
-  if (parsedAge !== null || parsedSex !== null) {
-    const prev = patientDemographicOverrides.get(patientId) || {}
-    patientDemographicOverrides.set(patientId, {
-      age: parsedAge !== null ? parsedAge : prev.age,
-      sex: parsedSex !== null ? parsedSex : prev.sex,
-    })
-  }
-
-  // 3. Update in-memory PATIENTS array
-  const pat = PATIENTS.find((p) => p.id === patientId)
-  if (pat) {
-    if (parsedAge !== null) {
-      pat.age = parsedAge
-      if (!pat.clinical_data) pat.clinical_data = {}
-      pat.clinical_data.age = parsedAge
-    }
-    if (parsedSex !== null) {
-      pat.sex = parsedSex
-      if (!pat.clinical_data) pat.clinical_data = {}
-      pat.clinical_data.sex = parsedSex === "F" ? "female" : "male"
-    }
-  }
-
-  // 4. Update disk JSON files (mock FHIR server files)
-  try {
-    const fs = await import("fs")
-    const path = await import("path")
-    const candidatePaths = [
-      path.resolve(process.cwd(), "packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
-      path.resolve(process.cwd(), "services/rag_service/data/mock_fhir/patients_expanded.json"),
-      path.resolve(process.cwd(), "../packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
-      path.resolve(process.cwd(), "../services/rag_service/data/mock_fhir/patients_expanded.json"),
-      path.resolve(process.cwd(), "../../packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
-      path.resolve(process.cwd(), "../../services/rag_service/data/mock_fhir/patients_expanded.json"),
-      "/Users/aahannayak/RESOURCE/techquest/packages/mcp-ehr/src/mcp_ehr/patients_expanded.json",
-      "/Users/aahannayak/RESOURCE/techquest/services/rag_service/data/mock_fhir/patients_expanded.json",
-    ]
-
-    for (const p of candidatePaths) {
-      if (fs.existsSync(p)) {
-        try {
-          const raw = fs.readFileSync(p, "utf-8")
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed.patients)) {
-            let found = false
-            for (const item of parsed.patients) {
-              const pid = item.patient_id || item.patient?.patient_id
-              if (pid === patientId) {
-                found = true
-                if (parsedAge !== null) {
-                  item.age = parsedAge
-                  if (item.patient) item.patient.age = parsedAge
-                }
-                if (parsedSex !== null) {
-                  const sNorm = parsedSex === "F" ? "female" : "male"
-                  item.sex = sNorm
-                  if (item.patient) item.patient.sex = sNorm
-                }
-                break
-              }
-            }
-            if (found) {
-              fs.writeFileSync(p, JSON.stringify(parsed, null, 2), "utf-8")
-            }
-          }
-        } catch {
-          // ignore write errors in restricted envs
-        }
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 5. Update Supabase public.patients
-  try {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (url && key) {
-      const supabase = createClient(url, key)
-      const updateData: Record<string, any> = {
-        updated_at: new Date().toISOString(),
-      }
-      if (parsedAge !== null) updateData.age = parsedAge
-      if (parsedSex !== null) updateData.sex = parsedSex === "F" ? "female" : "male"
-      if (pat?.clinical_data) updateData.clinical_data = pat.clinical_data
-
-      await supabase
-        .from("patients")
-        .update(updateData)
-        .eq("patient_id", patientId)
-    }
-  } catch {
-    // transient supabase error ignored
-  }
-
-  // 6. Post to FastAPI Gateway orchestrator
+  const age = resupplied.age === undefined || resupplied.age === null || String(resupplied.age).trim() === ""
+    ? null : Number(resupplied.age)
+  if (age !== null && (!Number.isFinite(age) || age <= 0)) throw new Error("Enter a valid positive age.")
+  const rawSex = String(resupplied.sex || "").trim().toLowerCase()
+  const sex = rawSex.startsWith("f") ? "female" : rawSex.startsWith("m") ? "male" : null
+  if (rawSex && !sex) throw new Error("Select a valid biological sex.")
   const payload = {
-    patientId,
-    resupplied: {
-      age: parsedAge,
-      sex: parsedSex ? (parsedSex === "F" ? "female" : "male") : resupplied.sex,
-    },
-    attempt_number: attemptNumber,
-    max_iters: maxIters,
-    justification: justification || `FHIR Demographic resupply attempt ${attemptNumber} of ${maxIters}`,
+    patientId, confirmed: true, resupplied: { age, sex }, attempt_number: attemptNumber,
+    max_iters: maxIters, justification: justification || "Clinician demographic resupply",
   }
-
-  const baseUrl = getGatewayUrl()
+  if (age === null && sex === null) {
+    const response = await postDecision(`${getGatewayUrl()}/api/orchestrator/resupply`, payload)
+    return response.json()
+  }
+  let result
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3500)
-    const response = await fetch(`${baseUrl}/api/orchestrator/resupply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    })
-    clearTimeout(timeoutId)
-
-    if (response.ok) {
-      return await response.json()
-    }
-  } catch (err) {
-    console.warn(`Gateway /api/orchestrator/resupply unreachable at ${baseUrl}; local resupply active:`, err)
+    result = await savePatientChange(getGatewayUrl(), "/api/orchestrator/resupply", payload, patientId)
+  } catch (error) {
+    return { status: "error", error: error instanceof Error ? error.message : "The database save could not be confirmed." }
   }
-
-  return { status: "resupplying", patientId, resupplied: { age: parsedAge, sex: parsedSex } }
+  const previous = patientDemographicOverrides.get(patientId) || {}
+  patientDemographicOverrides.set(patientId, {
+    age: age ?? previous.age, sex: sex ? (sex === "female" ? "F" : "M") : previous.sex,
+  })
+  return result
 }

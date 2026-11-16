@@ -101,8 +101,8 @@ When a protocol deviation or overdose occurs:
 * Evaluates free-text physician narrative notes using Clinical LLM processing.
 * **Fuzzy Typo Normalization**: Automatically recognizes and maps misspelled drug names (e.g., `"apixiban"` &rarr; `Apixaban`).
 * **Conversational Filtering**: Flags non-actionable or purely conversational notes with an explicit `⚠️ Clinical Warning: Inappropriate or Ambiguous Doctor Note` banner, blocking unsafe submissions until resolved.
-* **1-Click Protocol Remediation**: Provides a one-click button to instantly normalize non-compliant doses down to protocol-compliant ceilings in sub-millisecond local execution.
-* **Bidirectional Database Writeback**: Directly synchronizes validated updates to in-memory registries, local disk JSON fixtures, and Supabase cloud tables.
+* **Prescription Confirmation**: Typed notes and suggested changes open a review dialog showing the patient, current order, proposed order and note. Saving requires explicit confirmation.
+* **Verified Database Writeback**: Prescription changes require a confirmed Supabase row update before updating the local registry and best-effort disk mirror. Failed saves retain the note for retry and do not start a replacement evaluation. This writes the application's Supabase patient table; it does not update a remote FHIR server's MedicationRequest. See [dosage and persistence verification](DOSAGE_FIXES.md) for test coverage and deployment requirements.
 
 #### 6. FDA 21 CFR Part 11 Tamper-Evident Audit Trail
 Every agent execution, token exchange, consensus decision, and physician override is chained using **SHA-256 cryptographic hashes**, generating an immutable audit certificate and exportable clinical PDF/JSON reports.
@@ -576,7 +576,7 @@ lsof -ti :3000,8000,8001,8002,8003 | xargs kill -9
 ```
 
 ### Q2: What if I don't have a Supabase account?
-**Answer**: Supabase is completely optional! If `SUPABASE_URL` is left blank in `.env`, TrialGuard automatically falls back to high-performance in-memory state and local disk persistence (`packages/mcp-ehr/src/mcp_ehr/patients_expanded.json`). All features (including FHIR updates) will work out of the box.
+**Answer**: Read-only demo evaluation can use the bundled patient fixtures without Supabase. Confirmed prescription and demographic saves require a reachable Supabase project and server-side credentials; they fail visibly if the database cannot verify the update. A cache or JSON file change is not presented as a successful database save.
 
 ### Q3: `Operation not permitted (os error 1)` when running Python
 **Cause**: If executing inside a sandboxed CLI environment, Python execution may require permissions.  

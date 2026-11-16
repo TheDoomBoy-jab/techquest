@@ -27,6 +27,8 @@ import {
 } from "@/app/actions"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
 import { getGatewayUrl } from "@/lib/api-config"
+import { PrescriptionConfirmation } from "@/components/prescription-confirmation"
+import { preparePrescriptionConfirmation, type PrescriptionDraft } from "@/lib/prescription"
 
 export type Patient = {
   patient_id: string
@@ -118,6 +120,11 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
   const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null)
   const [fhirSynced, setFhirSynced] = useState(false)
   const [fhirSyncing, setFhirSyncing] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PrescriptionDraft | null>(null)
+  const [continueAfterSave, setContinueAfterSave] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const saveInProgressRef = useRef(false)
+  const extractionVersionRef = useRef(0)
 
   const isDisqualified = Boolean(selected && disqualifiedIds.includes(selected.patient_id))
 
@@ -182,24 +189,28 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     }
   }, [selected, action])
 
-  // Synchronize and persist to FHIR Database
-  async function executeFhirUpdate(res?: ClinicalExtractionResult | null, targetAction?: string) {
-    if (!selected) return
-    const activeRes = res || extractionResult
-    if (!activeRes || !activeRes.is_valid || activeRes.is_appropriate === false) return
+  function reviewPrescription(res = extractionResult, note = doctorNote || action, continueToReview = false) {
+    setSaveError(null)
+    try {
+      setPendingConfirmation(preparePrescriptionConfirmation(note, res))
+      setContinueAfterSave(continueToReview)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Extract a complete prescription first.")
+    }
+  }
+
+  async function executeFhirUpdate() {
+    const draft = pendingConfirmation
+    if (!selected || !draft || saveInProgressRef.current) return
+    saveInProgressRef.current = true
 
     setFhirSyncing(true)
+    setSaveError(null)
     try {
-      const mod = activeRes.modifications?.[0]
-      const stdDrug = activeRes.standardized_drug || mod?.dosage_name || dosingGuidelines?.drug || "Apixaban"
-      const dosageVal = activeRes.dosage ?? mod?.proposed_dosage ?? 5
-      const unitVal = activeRes.dosage_unit || mod?.dosage_unit || "mg"
-      const routeVal = activeRes.route || mod?.route || "oral"
-      const freqVal = activeRes.frequency || mod?.frequency || "twice daily"
-      const scheduleVal = activeRes.timing_schedule || mod?.timing_schedule || "08:00, 20:00"
-      const stdAction = activeRes.standardized_action || targetAction || action
+      const { drug: stdDrug, dose: dosageVal, unit: unitVal, route: routeVal, frequency: freqVal, action: stdAction } = draft
+      const scheduleVal = String(draft.extraction.timing_schedule || "")
 
-      await updateFhirDatabase(selected.patient_id, {
+      const result = await updateFhirDatabase(selected.patient_id, {
         standardized_action: stdAction,
         standardized_drug: stdDrug,
         dosage: dosageVal,
@@ -207,23 +218,15 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
         route: routeVal,
         frequency: freqVal,
         timing_schedule: scheduleVal,
-        doctor_note: doctorNote || action,
-        target_fhir_field: activeRes.target_fhir_field || mod?.target_field || "MedicationRequest.dosageInstruction[0]",
-      })
+        doctor_note: draft.note,
+      }, true)
+      if (!result.success) throw new Error(result.error)
 
-      const freqAbbr =
-        freqVal.toLowerCase().includes("twice") || freqVal.toLowerCase().includes("bid")
-          ? "BID"
-          : freqVal.toLowerCase().includes("3 weeks") || freqVal.toLowerCase().includes("q3w")
-          ? "IV Q3W"
-          : "daily"
-      const newMedStr = `${stdDrug} ${dosageVal}${unitVal} ${freqAbbr}`
       const existingMeds = Array.isArray(selected.medications) ? [...selected.medications] : []
-      const drugRegex = new RegExp(stdDrug, "i")
-      const updatedMeds = existingMeds.map((m) => (drugRegex.test(m) ? newMedStr : m))
-      if (!updatedMeds.some((m) => drugRegex.test(m))) {
-        updatedMeds.unshift(newMedStr)
-      }
+      const drugIndex = existingMeds.findIndex((m) => m.split(/\s+/)[0].toLowerCase() === stdDrug.split(/\s+/)[0].toLowerCase())
+      if (drugIndex < 0) existingMeds.unshift(stdAction)
+      else existingMeds[drugIndex] = stdAction
+      const updatedMeds = existingMeds
 
       const updatedPatient: Patient = {
         ...selected,
@@ -246,9 +249,12 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
       setPatients((prev) => prev.map((p) => (p.patient_id === selected.patient_id ? updatedPatient : p)))
       setAction(stdAction)
       setFhirSynced(true)
+      setPendingConfirmation(null)
+      if (continueAfterSave) onSubmit(updatedPatient, protocol, stdAction)
     } catch (err) {
-      console.error("FHIR update error:", err)
+      setSaveError(err instanceof Error ? err.message : "The prescription could not be saved. Your note has been kept.")
     } finally {
+      saveInProgressRef.current = false
       setFhirSyncing(false)
     }
   }
@@ -259,20 +265,22 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     const doseToApply = targetDose || dosingGuidelines?.standardDose || "Apixaban 5 mg oral twice daily"
     setAction(doseToApply)
     const promptText = `Adjust dosage to standard ${doseToApply} per protocol guidelines.`
+    const version = ++extractionVersionRef.current
     setDoctorNote(promptText)
     setIsExtracting(true)
     setFhirSynced(false)
 
     try {
       const result = await processClinicalComment(promptText)
+      if (version !== extractionVersionRef.current) return
       setExtractionResult(result)
       if (result.is_valid && result.is_appropriate !== false) {
-        await executeFhirUpdate(result, doseToApply)
+        reviewPrescription(result, promptText)
       }
     } catch (err) {
       console.warn("Remediation evaluation fallback:", err)
     } finally {
-      setIsExtracting(false)
+      if (version === extractionVersionRef.current) setIsExtracting(false)
     }
   }
 
@@ -280,10 +288,12 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
   async function handleExtract(customText?: string) {
     const textToEval = (customText ?? doctorNote ?? action).trim()
     if (!textToEval) return
+    const version = ++extractionVersionRef.current
     setIsExtracting(true)
     setFhirSynced(false)
     try {
       const result = await processClinicalComment(textToEval)
+      if (version !== extractionVersionRef.current) return
       setExtractionResult(result)
       if (result.is_valid && result.is_appropriate !== false && result.standardized_action) {
         setAction(result.standardized_action)
@@ -291,7 +301,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     } catch (err) {
       console.error("Clinical extraction error:", err)
     } finally {
-      setIsExtracting(false)
+      if (version === extractionVersionRef.current) setIsExtracting(false)
     }
   }
 
@@ -304,7 +314,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     }
 
     if (extractionResult?.is_valid && extractionResult.is_appropriate !== false && !fhirSynced) {
-      await executeFhirUpdate(extractionResult, action)
+      reviewPrescription(extractionResult, doctorNote || action, true)
+      return
     }
 
     onSubmit(selected, protocol, action)
@@ -367,7 +378,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
               diagnosis: String(item.diagnosis || (clinical.diagnoses ? clinical.diagnoses[0] : "Standard Protocol")),
               creatinine: renalStr,
               medications: Array.isArray(item.medications) ? item.medications : (clinical.medications || []),
-              clinical_data: clinical,
+              clinical_data: { ...clinical, prescribed_action: item.prescribed_action || clinical.prescribed_action || clinical.default_prescribed_action },
               report_history: Array.isArray(item.report_history)
                 ? item.report_history
                 : Array.isArray(item.adjudication_reports)
@@ -401,6 +412,12 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
   }, [query, patients])
 
   function choose(patient: Patient) {
+    extractionVersionRef.current++
+    setIsExtracting(false)
+    setPendingConfirmation(null)
+    setSaveError(null)
+    const storedAction = String(patient.clinical_data?.prescribed_action || patient.clinical_data?.default_prescribed_action || "").trim()
+    setDoctorNote(storedAction)
     setSelected(patient)
     setQuery(patient.name)
     setOpen(false)
@@ -439,8 +456,8 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     }
     if (PRESETS[pid]) {
       setProtocol(PRESETS[pid].protocol)
-      setAction(PRESETS[pid].action)
-      setDoctorNote(PRESETS[pid].action)
+      setAction(storedAction || PRESETS[pid].action)
+      setDoctorNote(storedAction || PRESETS[pid].action)
       setExtractionResult(null)
       setFhirSynced(false)
       setModifyOpen(false)
@@ -461,7 +478,9 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
     setProtocol(matchedProtocol)
 
     // Tailor default proposed action to the patient's clinical archetype and medications
-    if (
+    if (storedAction) {
+      setAction(storedAction)
+    } else if (
       meds.some((m) => m.toLowerCase().includes("pembrolizumab")) ||
       allText.includes("oncology") ||
       allText.includes("carcinoma") ||
@@ -1181,6 +1200,10 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
               <textarea
                 value={action}
                 onChange={(e) => {
+                  extractionVersionRef.current++
+                  setIsExtracting(false)
+                  setPendingConfirmation(null)
+                  setSaveError(null)
                   setAction(e.target.value)
                   setDoctorNote(e.target.value)
                   setFhirSynced(false)
@@ -1217,6 +1240,10 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     <button
                       type="button"
                       onClick={() => {
+                        extractionVersionRef.current++
+                        setIsExtracting(false)
+                        setPendingConfirmation(null)
+                        setSaveError(null)
                         setAction(dosingGuidelines.standardDose)
                         setDoctorNote(dosingGuidelines.standardDose)
                         setFhirSynced(false)
@@ -1255,7 +1282,15 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                   </label>
                   <textarea
                     value={doctorNote}
-                    onChange={(e) => setDoctorNote(e.target.value)}
+                    onChange={(e) => {
+                      extractionVersionRef.current++
+                      setIsExtracting(false)
+                      setDoctorNote(e.target.value)
+                      setExtractionResult(null)
+                      setPendingConfirmation(null)
+                      setSaveError(null)
+                      setFhirSynced(false)
+                    }}
                     rows={3}
                     placeholder="E.g., Patient exhibits stable renal function (CrCl 68 mL/min). Titrate apixiban to 5 mg oral twice daily per protocol Arm A..."
                     className="w-full resize-none rounded-lg border border-slate-700/50 bg-[#070D17] p-2.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none leading-relaxed font-mono"
@@ -1364,7 +1399,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     type="button"
                     size="sm"
                     disabled={fhirSyncing}
-                    onClick={() => executeFhirUpdate()}
+                    onClick={() => reviewPrescription()}
                     className={`h-8 px-3 text-xs font-semibold rounded-lg transition-all ${
                       fhirSynced
                         ? "bg-emerald-950 text-emerald-300 border border-emerald-700/60"
@@ -1378,7 +1413,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                     ) : (
                       <FileCheck2 className="size-3.5 mr-1.5" />
                     )}
-                    {fhirSynced ? "FHIR Database Synchronized" : "Confirm & Update FHIR Database"}
+                    {fhirSynced ? "Prescription saved to database" : "Review prescription change"}
                   </Button>
                 </div>
               </div>
@@ -1404,7 +1439,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
             const isWarningBlocked = Boolean(extractionResult && (!extractionResult.is_valid || extractionResult.is_appropriate === false))
             return (
               <Button
-                disabled={!selected || isDisqualified || isWarningBlocked}
+                disabled={!selected || isDisqualified || isWarningBlocked || fhirSyncing || isExtracting}
                 onClick={handleSubmitClick}
                 className={`mt-6 h-11 w-full font-semibold transition-all ${
                   isDisqualified
@@ -1433,6 +1468,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
               </Button>
             )
           })()}
+          {saveError && !pendingConfirmation && <p role="alert" className="mt-3 text-sm text-rose-300">{saveError}</p>}
           {!selected && (
             <p className="mt-2 text-center text-xs text-slate-500">
               Select a patient to enable submission.
@@ -1440,6 +1476,16 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
           )}
         </div>
       </main>
+      <PrescriptionConfirmation
+        draft={pendingConfirmation}
+        patientId={selected?.patient_id || ""}
+        patientName={selected?.name || ""}
+        currentAction={selected?.clinical_data?.prescribed_action || selected?.medications?.[0] || "No stored order"}
+        busy={fhirSyncing}
+        error={saveError}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={executeFhirUpdate}
+      />
     </div>
   )
 }

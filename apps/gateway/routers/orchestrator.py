@@ -28,9 +28,8 @@ from services.patient_service import (
     extract_patient_clinical_package,
     get_all_patients,
     update_patient_in_cache,
-    resupply_patient_demographics,
 )
-from services.supabase_reports import ReportPersistenceError, append_final_report, get_final_reports
+from services.supabase_reports import PatientPersistenceError, ReportPersistenceError, append_final_report, get_final_reports
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,6 +37,26 @@ arbitration_results: dict[str, dict] = {}
 hitl_packages: dict[str, dict] = {}
 runs: dict[str, dict] = {}
 run_tasks: dict[str, asyncio.Task] = {}
+_resume_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _save_patient(**changes) -> dict:
+    try:
+        receipt = await asyncio.to_thread(update_patient_in_cache, **changes)
+    except PatientPersistenceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid patient update fields") from exc
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Patient could not be found")
+    if not isinstance(receipt, dict) or receipt.get("verified") is not True or receipt.get("storage") != "supabase":
+        raise HTTPException(status_code=503, detail="The database save was not confirmed")
+    return receipt
+
+
+@router.get("/api/orchestrator/capabilities")
+async def persistence_capabilities() -> dict:
+    return {"confirmed_prescription_updates": True, "persistence": "supabase_verified"}
 
 
 def _event(name: str, status: str, **details) -> dict:
@@ -359,13 +378,11 @@ async def start_run(payload: dict) -> dict:
     normalized_rag_output = _simulated_rag_output(patient_id, rag_output)
     if payload.get("prescribed_action"):
         normalized_rag_output["prescribed_action"] = payload["prescribed_action"]
-        update_patient_in_cache(patient_id=patient_id, prescribed_action=payload["prescribed_action"])
 
     p_info = payload.get("patient") or {}
     p_age = p_info.get("age")
     p_sex = p_info.get("sex")
     if p_age is not None and isinstance(p_age, (int, float)) and p_age > 0:
-        update_patient_in_cache(patient_id=patient_id, age=p_age, sex=p_sex if p_sex else None)
         normalized_rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})["age"] = p_age
         if p_sex:
             normalized_rag_output.setdefault("rule_analysis_package", {}).setdefault("patient", {})["sex"] = p_sex
@@ -467,6 +484,8 @@ async def fhir_update_patient(payload: dict):
         raise HTTPException(status_code=400, detail="patientId is required")
 
     action = payload.get("standardized_action") or payload.get("prescribed_action") or ""
+    if payload.get("confirmed") is not True:
+        raise HTTPException(status_code=400, detail="Confirm the patient change before saving")
     dosage = payload.get("dosage")
     dosage_unit = payload.get("dosage_unit", "mg")
     route = payload.get("route", "oral")
@@ -476,7 +495,21 @@ async def fhir_update_patient(payload: dict):
     age = payload.get("age")
     sex = payload.get("sex")
 
-    success = update_patient_in_cache(
+    if action:
+        drug = payload.get("standardized_drug")
+        values = [drug, payload.get("dosage_unit"), payload.get("route"), payload.get("frequency")]
+        try:
+            parsed_dose = float(dosage)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="An explicit positive dose is required")
+        if isinstance(dosage, bool) or not math.isfinite(parsed_dose) or parsed_dose <= 0 or not all(isinstance(v, str) and v.strip() for v in values):
+            raise HTTPException(status_code=400, detail="Drug, positive dose, units, route and frequency are required")
+        canonical = f"{drug.strip()} {parsed_dose:g} {dosage_unit.strip()} {route.strip()} {frequency.strip()}"
+        if " ".join(action.split()).casefold() != canonical.casefold():
+            raise HTTPException(status_code=400, detail="Prescription fields do not match the order being confirmed")
+        action, dosage = canonical, parsed_dose
+
+    receipt = await _save_patient(
         patient_id=patient_id,
         prescribed_action=action,
         dosage=dosage,
@@ -489,18 +522,8 @@ async def fhir_update_patient(payload: dict):
         sex=sex,
     )
 
-    # Sync into memory runs and arbitration results if active
-    if patient_id in runs:
-        if "rag_output" in runs[patient_id] and runs[patient_id]["rag_output"]:
-            runs[patient_id]["rag_output"]["prescribed_action"] = action
-        if runs[patient_id].get("result"):
-            runs[patient_id]["result"]["prescribed_action"] = action
-    if patient_id in arbitration_results:
-        arbitration_results[patient_id]["prescribed_action"] = action
-    if patient_id in hitl_packages:
-        hitl_packages[patient_id]["prescribed_action"] = action
-
-    return {"status": "success", "patientId": patient_id, "updated": success, "prescribed_action": action}
+    # Existing evaluations retain their original order; saving does not re-label an old verdict.
+    return {"status": "success", "patientId": patient_id, "updated": True, "prescribed_action": action, "persistence": receipt}
 
 
 @router.post("/api/orchestrator/resume")
@@ -508,6 +531,13 @@ async def resume_orchestrator(payload: dict):
     patient_id = payload.get("patientId")
     if not patient_id:
         raise HTTPException(status_code=400, detail="patientId is required")
+    if payload.get("confirmed") is not True:
+        raise HTTPException(status_code=400, detail="Confirm the prescription change before saving")
+    async with _resume_locks.setdefault(patient_id, asyncio.Lock()):
+        return await _resume_confirmed_prescription(patient_id, payload)
+
+
+async def _resume_confirmed_prescription(patient_id: str, payload: dict):
     previous_state = runs.get(patient_id)
     if not previous_state or not previous_state.get("result"):
         raise HTTPException(status_code=409, detail="No completed evaluation exists to modify")
@@ -526,6 +556,8 @@ async def resume_orchestrator(payload: dict):
     unit = ext.get("dosage_unit") or mod.get("dosage_unit")
     route = ext.get("route") or mod.get("route")
     frequency = ext.get("frequency") or mod.get("frequency")
+    if isinstance(dose, bool):
+        raise HTTPException(status_code=400, detail="An explicit positive target dosage is required")
     try:
         dose = float(dose)
     except (TypeError, ValueError):
@@ -533,15 +565,16 @@ async def resume_orchestrator(payload: dict):
     if not math.isfinite(dose) or dose <= 0 or not all(isinstance(v, str) and v.strip() for v in (drug, unit, route, frequency)):
         raise HTTPException(status_code=400, detail="Drug, positive dose, units, route and frequency are required")
     new_action = f"{drug.strip()} {dose:g} {unit.strip()} {route.strip()} {frequency.strip()}"
+    for supplied_action in (payload.get("prescribed_action"), ext.get("standardized_action")):
+        if supplied_action is not None and (not isinstance(supplied_action, str) or " ".join(supplied_action.split()).casefold() != new_action.casefold()):
+            raise HTTPException(status_code=400, detail="Prescription fields do not match the order being confirmed")
     rag_output["prescribed_action"] = new_action
-    updated = update_patient_in_cache(
+    receipt = await _save_patient(
         patient_id=patient_id, prescribed_action=new_action, dosage=dose,
         dosage_unit=unit, route=route, frequency=frequency,
         timing_schedule=ext.get("timing_schedule") or mod.get("timing_schedule") or "",
         doctor_note=payload.get("justification"),
     )
-    if not updated:
-        raise HTTPException(status_code=404, detail="Patient could not be updated")
     rag_output.setdefault("rule_analysis_package", {})["patient"] = extract_patient_clinical_package(patient_id)
     # One canonical prescription is passed to every agent. Do not re-apply stale fields.
     modifications = [{"dosage_name": drug, "proposed_dosage": dose, "dosage_unit": unit, "route": route, "frequency": frequency}]
@@ -567,7 +600,7 @@ async def resume_orchestrator(payload: dict):
         modifications=modifications,
         report_history=report_history,
     ))
-    return {"status": "success", "patientId": patient_id, "prescribed_action": rag_output["prescribed_action"]}
+    return {"status": "success", "patientId": patient_id, "prescribed_action": rag_output["prescribed_action"], "persistence": receipt}
  
  
 @router.post("/api/orchestrator/resupply")
@@ -575,6 +608,8 @@ async def resupply_orchestrator(payload: dict):
     patient_id = payload.get("patientId") or payload.get("patient_id")
     if not patient_id:
         raise HTTPException(status_code=400, detail="patientId is required")
+    if payload.get("confirmed") is not True:
+        raise HTTPException(status_code=400, detail="Confirm the patient change before saving")
 
     resupplied = payload.get("resupplied", {})
     attempt_number = int(payload.get("attempt_number", 1))
@@ -594,7 +629,7 @@ async def resupply_orchestrator(payload: dict):
         parsed_sex = "female" if s.startswith("f") else "male" if s.startswith("m") else s
 
     # Persist resupplied demographics across memory cache, disk JSON, and Supabase
-    resupply_patient_demographics(patient_id=patient_id, age=parsed_age, sex=parsed_sex)
+    receipt = await _save_patient(patient_id=patient_id, age=parsed_age, sex=parsed_sex) if parsed_age is not None or parsed_sex is not None else None
 
     previous_state = runs.get(patient_id)
     if previous_state and previous_state.get("rag_output"):
@@ -644,6 +679,7 @@ async def resupply_orchestrator(payload: dict):
         "max_iters": max_iters,
         "age": parsed_age,
         "sex": parsed_sex,
+        "persistence": receipt,
     }
 
 

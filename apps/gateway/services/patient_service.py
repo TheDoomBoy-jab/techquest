@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import json
+import copy
 import logging
+import os
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 _PATIENTS_CACHE: Optional[Dict[str, Dict[str, Any]]] = None
+_PATIENT_LOCKS: dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+_MIRROR_LOCK = threading.Lock()
 
 # Known candidate paths for patients_expanded.json in the repository
 CANDIDATE_PATHS = [
     Path(__file__).resolve().parents[3] / "packages" / "mcp-ehr" / "src" / "mcp_ehr" / "patients_expanded.json",
     Path(__file__).resolve().parents[3] / "services" / "rag_service" / "data" / "mock_fhir" / "patients_expanded.json",
     Path(__file__).resolve().parents[2] / "packages" / "mcp-ehr" / "src" / "mcp_ehr" / "patients_expanded.json",
-    Path("/Users/aahannayak/RESOURCE/techquest/packages/mcp-ehr/src/mcp_ehr/patients_expanded.json"),
 ]
 
 # Synthetic severe renal impairment patient profile for clinical trial exclusion testing
@@ -101,7 +107,27 @@ def _load_cache() -> Dict[str, Dict[str, Any]]:
                 logger.warning("Failed loading patient JSON from %s: %s", path, exc)
 
     # Inject severe renal patient for exclusion validation
-    cache["P033"] = SEVERE_RENAL_PATIENT
+    cache["P033"] = copy.deepcopy(SEVERE_RENAL_PATIENT)
+
+    # Database values are authoritative after a process restart.
+    from services.supabase_reports import load_persisted_patients
+    for saved in load_persisted_patients():
+        pid = str(saved.get("patient_id") or "").strip().upper()
+        if not pid:
+            continue
+        record = cache.setdefault(pid, {"patient_id": pid, "patient": {}})
+        patient = record.get("patient", record)
+        clinical = saved.get("clinical_data") or {}
+        if isinstance(clinical, dict):
+            patient.update(copy.deepcopy(clinical))
+        patient["patient_id"] = pid
+        for field in ("age", "sex"):
+            if field in saved:
+                patient[field] = saved[field]
+                record[field] = saved[field]
+        if saved.get("prescribed_action"):
+            patient["default_prescribed_action"] = saved["prescribed_action"]
+            record["default_prescribed_action"] = saved["prescribed_action"]
 
     _PATIENTS_CACHE = cache
     return _PATIENTS_CACHE
@@ -120,6 +146,43 @@ def reload_patient_cache() -> Dict[str, Dict[str, Any]]:
     return _load_cache()
 
 
+def _mirror_patient_update(patient_id: str, updates: dict) -> bool:
+    """Best-effort atomic local mirror after the database has confirmed the save."""
+    with _MIRROR_LOCK:
+        for path in CANDIDATE_PATHS:
+            if not path.is_file():
+                continue
+            temporary = None
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                target = next((item for item in data.get("patients", [])
+                               if str(item.get("patient_id") or item.get("patient", {}).get("patient_id", "")).upper() == patient_id), None)
+                if target is None:
+                    continue
+                patient = target.get("patient", target)
+                for field in ("age", "sex"):
+                    if field in updates:
+                        target[field] = patient[field] = updates[field]
+                if "prescribed_action" in updates:
+                    target["default_prescribed_action"] = patient["default_prescribed_action"] = updates["prescribed_action"]
+                for field in ("medications", "dosage_instructions"):
+                    if field in updates:
+                        patient[field] = updates[field]
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+                    temporary = Path(handle.name)
+                    json.dump(data, handle, indent=2)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, path)
+                return True
+            except Exception:
+                logger.warning("Database save succeeded but the local patient mirror could not be updated")
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+    return False
+
+
 def update_patient_in_cache(
     patient_id: str,
     prescribed_action: Optional[str] = None,
@@ -131,117 +194,60 @@ def update_patient_in_cache(
     doctor_note: Optional[str] = None,
     age: Optional[int | float] = None,
     sex: Optional[str] = None,
-) -> bool:
-    """Updates the patient profile in memory, persists to disk patients_expanded.json, and syncs to Supabase."""
+) -> dict | bool:
+    """Confirm the database write before publishing changed state to local readers."""
     from datetime import datetime, timezone
-    from services.supabase_reports import sync_patient_data_to_supabase
+    from services.supabase_reports import PatientPersistenceError, sync_patient_data_to_supabase
 
     clean_id = patient_id.strip().upper()
     cache = _load_cache()
-    target_record = cache.get(clean_id)
-    if not target_record:
+    if clean_id not in cache:
         return False
-
-    p = target_record.get("patient", target_record)
-
-    # 1. Demographic updates if provided
-    if age is not None:
-        try:
-            val = float(age)
-            target_record["age"] = int(val) if val.is_integer() else val
-            p["age"] = int(val) if val.is_integer() else val
-        except (ValueError, TypeError):
-            target_record["age"] = age
-            p["age"] = age
-    if sex:
-        s = str(sex).strip().lower()
-        target_record["sex"] = "female" if s.startswith("f") else "male" if s.startswith("m") else s
-        p["sex"] = target_record["sex"]
-
-    # 2. Medication / Action updates if provided
-    meds = p.get("medications", [])
-    if prescribed_action:
-        target_record["default_prescribed_action"] = prescribed_action
-        p["default_prescribed_action"] = prescribed_action
-
-        words = prescribed_action.split()
-        drug_name = words[0] if words else "Medication"
-        # Keep the same complete order in the medication list and evaluation input.
-        # Abbreviating every non-BID frequency to "daily" corrupted IV cycle orders.
-        new_med_str = prescribed_action
-
-        if isinstance(meds, list):
-            replaced = False
-            for i, m in enumerate(meds):
-                if drug_name.lower() in m.lower():
-                    meds[i] = new_med_str
-                    replaced = True
-                    break
-            if not replaced:
-                meds.insert(0, new_med_str)
-            p["medications"] = meds
-
-        p["dosage_instructions"] = {
-            "dose": dosage,
-            "unit": dosage_unit,
-            "frequency": frequency,
-            "timing_schedule": timing_schedule,
-            "route": route,
-            "last_modified_timestamp": datetime.now(timezone.utc).isoformat(),
-            "clinical_rationale": doctor_note or "Clinician HITL modification",
-        }
-
-    # 3. Persist to disk files
-    for path in CANDIDATE_PATHS:
-        if path.exists():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                for item in data.get("patients", []):
-                    item_p = item.get("patient", item)
-                    ipid = str(item.get("patient_id") or item_p.get("patient_id", "")).upper()
-                    if ipid == clean_id:
-                        if age is not None:
-                            item["age"] = p["age"]
-                            item_p["age"] = p["age"]
-                        if sex:
-                            item["sex"] = p["sex"]
-                            item_p["sex"] = p["sex"]
-                        if prescribed_action:
-                            item["default_prescribed_action"] = prescribed_action
-                            item_p["default_prescribed_action"] = prescribed_action
-                            item_p["medications"] = meds
-                            if "dosage_instructions" in p:
-                                item_p["dosage_instructions"] = p["dosage_instructions"]
-                        break
-                path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            except Exception as exc:
-                logger.warning("Failed writing updated patient to %s: %s", path, exc)
-
-    # 4. Sync to Supabase
-    try:
-        supabase_updates: dict = {}
+    with _LOCKS_GUARD:
+        lock = _PATIENT_LOCKS.setdefault(clean_id, threading.Lock())
+    with lock:
+        candidate = copy.deepcopy(cache[clean_id])
+        patient = candidate.get("patient", candidate)
+        updates = {}
         if age is not None:
-            supabase_updates["age"] = p.get("age")
+            value = float(age)
+            updates["age"] = patient["age"] = candidate["age"] = int(value) if value.is_integer() else value
         if sex:
-            supabase_updates["sex"] = p.get("sex")
+            value = str(sex).strip().lower()
+            updates["sex"] = patient["sex"] = candidate["sex"] = "female" if value.startswith("f") else "male" if value.startswith("m") else value
         if prescribed_action:
-            supabase_updates["prescribed_action"] = prescribed_action
-            supabase_updates["medications"] = meds
-            if "dosage_instructions" in p:
-                supabase_updates["dosage_instructions"] = p["dosage_instructions"]
-        if supabase_updates:
-            sync_patient_data_to_supabase(clean_id, supabase_updates)
-    except Exception as exc:
-        logger.warning("Failed calling Supabase sync for %s: %s", clean_id, exc)
-
-    return True
+            candidate["default_prescribed_action"] = patient["default_prescribed_action"] = prescribed_action
+            medications = patient.get("medications", [])
+            if not isinstance(medications, list):
+                raise PatientPersistenceError("The patient medication list is invalid. The change was not saved.", 400)
+            drug = prescribed_action.split()[0].casefold()
+            index = next((i for i, medication in enumerate(medications) if str(medication).split() and str(medication).split()[0].casefold() == drug), None)
+            if index is None:
+                medications.insert(0, prescribed_action)
+            else:
+                medications[index] = prescribed_action
+            patient["medications"] = medications
+            instructions = {"dose": dosage, "unit": dosage_unit, "frequency": frequency,
+                            "timing_schedule": timing_schedule, "route": route,
+                            "last_modified_timestamp": datetime.now(timezone.utc).isoformat(),
+                            "clinical_rationale": doctor_note or "Clinician modification"}
+            patient["dosage_instructions"] = instructions
+            updates.update(prescribed_action=prescribed_action, medications=medications, dosage_instructions=instructions)
+        if not updates:
+            raise PatientPersistenceError("No patient changes were supplied.", 400)
+        receipt = sync_patient_data_to_supabase(clean_id, updates)
+        if not isinstance(receipt, dict) or receipt.get("verified") is not True or receipt.get("storage") != "supabase" or receipt.get("patient_id") != clean_id:
+            raise PatientPersistenceError("The database save was not confirmed. The local record was not changed.")
+        cache[clean_id] = candidate
+        receipt["local_mirror_saved"] = _mirror_patient_update(clean_id, updates)
+        return receipt
 
 
 def resupply_patient_demographics(
     patient_id: str,
     age: Optional[int | float] = None,
     sex: Optional[str] = None,
-) -> bool:
+) -> dict | bool:
     """Convenience helper to resupply patient demographic parameters and sync across memory, disk, and Supabase."""
     return update_patient_in_cache(
         patient_id=patient_id,

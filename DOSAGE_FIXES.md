@@ -1,6 +1,6 @@
 # Doctor-note modification regression fixes
 
-Verified locally on 2026-11-16. Verification covers the source changes in this repository; deployment of these fixes has not been verified.
+Verified locally on 2026-11-16. The completed-stream result-loading fix was also verified against the deployed response. The confirmation and verified-persistence changes below require an updated gateway and a reachable Supabase project; a live database write has not been verified.
 
 ## Fixed behavior
 
@@ -24,25 +24,36 @@ Read-only verification against the actual deployed P044 response confirmed: HTTP
 
 ## Verification
 
-- 15 Python dosage regression tests passed.
-- 4 FHIR regression tests passed.
-- 10 Node regression tests passed.
+- 44 Python regression tests passed, including dosage, persistence and FHIR client coverage.
+- 25 Node/React regression tests passed.
 - Next.js production build and TypeScript checking passed.
 - `git diff --check` passed.
 
-The HTTP integration tests use FastAPI ASGI requests through the real extraction, resume, SSE and package routes, real coordinator logic, and patient persistence to temporary JSON files. They cover two consecutive modifications for both an oral order and an IV order. They assert the action, specialist input, stored medication, dose instructions, iteration number, original prescription and accumulated report history.
+The HTTP integration tests use FastAPI ASGI requests through the real extraction, resume, SSE and package routes, real coordinator logic, and the real persistence client connected to an HTTPX mock database transport. They cover two consecutive modifications for both an oral order and an IV order. They assert the database PATCH and returned row, action, specialist input, stored medication, dose instructions, iteration number, original prescription and accumulated report history. Local mirror writes use temporary files.
 
-External specialist responses and Supabase writes are stubbed in these tests. They establish the application's state and data flow, not clinical correctness, provider availability or live database durability. The tests do not mutate the public demo or the repository's patient fixtures. This verification did not include Safari UI interaction.
+The database transport and external specialist responses are test fixtures. These tests establish the application's state and data flow, not clinical correctness, provider availability or live database durability. React/jsdom tests use the actual confirmation dialog and intake component, isolating server actions in the intake tests. They verify cancellation, failed saves, confirmed submission and restoration of a saved order. The tests do not mutate the public demo or the repository's patient fixtures. This verification did not include Safari UI interaction.
+
+## Confirmed persistence
+
+- Both intake and post-evaluation modification paths show the patient, current/proposed prescription and doctor's note before saving. Opening or cancelling the dialog performs no write. Duplicate clicks are blocked while saving.
+- The frontend checks `/api/orchestrator/capabilities` before submitting a save, so an older gateway cannot silently treat a modification as a cache-only success. The endpoint advertises the supported contract, not current database health.
+- Confirmed writes require an exact patient ID, complete positive dosage and a matching Supabase response row. Missing credentials, network failures, HTTP errors, empty updates and mismatched values are errors. Only a verified receipt permits the UI to show success and restart evaluation.
+- Existing evaluations retain their original prescription when a save fails. Initial evaluations do not persist unconfirmed prescription or demographic fields. Saving through `/api/fhir/update` does not re-label an old verdict.
+- Supabase is authoritative for restart hydration. Local mirrors update atomically after cloud confirmation; mirror failure does not invalidate an already confirmed cloud save.
+- Patient updates and report appends compare `updated_at` before writing. A report append retries from the current row instead of overwriting a concurrently changed prescription.
+- Saved prescriptions take precedence over intake scenario presets. Remote evaluation guardrail results are no longer overwritten with a locally forced pass after demographic resupply.
+
+The configured Supabase hostname returned public DNS `NXDOMAIN` during verification. The project owner is restoring the same project. Until it is reachable and the gateway has its server-side `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, saves must fail visibly. The `patients` table needs `patient_id`, `prescribed_action`, `clinical_data`, `updated_at`, `age` and `sex` columns. The new writeback contract targets this application's Supabase table; it does not claim to update an external FHIR server.
 
 ## Reproduce
 
 From the repository root, use a Python environment with the gateway dependencies and pytest installed, and Node.js with TypeScript stripping support:
 
 ```sh
-PYTHONPATH=apps/gateway python -m pytest -q apps/gateway/tests/test_dosage_modification.py packages/mcp-ehr/tests/test_fhir_client.py
-node --experimental-strip-types --test apps/web/tests/*.test.mjs
+PYTHONPATH=apps/gateway python -m pytest -q apps/gateway/tests packages/mcp-ehr/tests/test_fhir_client.py
+pnpm --dir apps/web test
 pnpm --dir apps/web build
 git diff --check
 ```
 
-The patient service still treats disk/Supabase persistence failures as warnings. A successful local update therefore does not establish that a remote database write succeeded; this patch does not change that persistence contract.
+Deploy the gateway changes before enabling confirmed saves in the frontend. Check that its capability response contains `confirmed_prescription_updates: true` and `persistence: "supabase_verified"`. After restoring Supabase, verify a confirmed change against the persisted row and after a process restart before claiming live durability.

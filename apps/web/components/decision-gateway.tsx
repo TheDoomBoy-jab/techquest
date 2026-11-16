@@ -35,6 +35,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TrialGuardLogo } from "@/components/trialguard-logo"
+import { PrescriptionConfirmation } from "@/components/prescription-confirmation"
+import { preparePrescriptionConfirmation, type PrescriptionDraft } from "@/lib/prescription"
 import { processClinicalComment, submitDecision, resupplyPatientData } from "@/app/actions"
 import type { ArbitrationResult } from "@/app/actions"
 import type { Patient } from "@/lib/clinical-data"
@@ -97,7 +99,6 @@ export function DecisionGateway({
   )
   const [modifyOpen, setModifyOpen] = useState(false)
   const modifyDrawerRef = useRef<HTMLDivElement>(null)
-  const [isApplyingRemediation, setIsApplyingRemediation] = useState(false)
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false)
   const [showDeepAudit, setShowDeepAudit] = useState(false)
   const [copiedPayload, setCopiedPayload] = useState(false)
@@ -126,6 +127,8 @@ export function DecisionGateway({
   const [overrideError, setOverrideError] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionResult, setExtractionResult] = useState<any>(null)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PrescriptionDraft | null>(null)
+  const saveInProgressRef = useRef(false)
 
   useEffect(() => {
     setLocalPatient((prev) => ({
@@ -613,30 +616,28 @@ export function DecisionGateway({
     setResupplyError(null)
     setIsResupplying(true)
     const nextAttempt = resupplyAttempts + 1
-    setResupplyAttempts(nextAttempt)
 
     const updatedPatient = {
       ...localPatient,
       age: ageNum,
       sex: resupplySex === "Female" || resupplySex === "F" ? "F" : "M",
     }
-    setLocalPatient(updatedPatient)
-    onPatientUpdated?.({
-      age: ageNum,
-      sex: resupplySex === "Female" || resupplySex === "F" ? "F" : "M",
-    })
 
     try {
-      await resupplyPatientData(
+      const result = await resupplyPatientData(
         patient.id,
         { age: ageNum, sex: resupplySex.toLowerCase() },
         nextAttempt,
         maxIters,
         `Clinician demographic resupply (Age: ${ageNum}, Sex: ${resupplySex}): ${resupplyAttestation}`
       )
+      if (result.status === "error") throw new Error(result.error)
+      setResupplyAttempts(nextAttempt)
+      setLocalPatient(updatedPatient)
+      onPatientUpdated?.({ age: ageNum, sex: updatedPatient.sex })
       onRestartStream?.()
     } catch (err: any) {
-      console.warn("Remote resupply endpoint warning (local demographic update active):", err)
+      setResupplyError(err?.message || "Patient data could not be saved. Please retry.")
     } finally {
       setIsResupplying(false)
     }
@@ -709,71 +710,25 @@ export function DecisionGateway({
     remPrompt = "Adjust dosage to standard 30 mg oral once daily per metabolic protocol guidelines."
   }
 
-  // 1-Click Remediation Recommendation
-  async function handleApplyRemediation() {
-    setIsApplyingRemediation(true)
-    commentRef.current = remPrompt
-    setExtractionResult(null)
-    setComment(remPrompt)
-
-    const standardized = remDose.includes("5 mg") ? "Apixaban 5 mg oral twice daily"
-      : remDose.includes("200 mg") ? "Pembrolizumab 200 mg IV every 3 weeks"
-      : remDose.includes("10 mg") ? "Empagliflozin 10 mg oral once daily"
-      : "Pioglitazone 30 mg oral once daily"
-    const drugName = remDose.includes("5 mg") ? "Apixaban"
-      : remDose.includes("200 mg") ? "Pembrolizumab"
+  // Suggested changes use the same explicit confirmation as a typed doctor's note.
+  function handleApplyRemediation() {
+    const drugName = remDose.includes("200 mg") ? "Pembrolizumab"
       : remDose.includes("10 mg") ? "Empagliflozin"
-      : "Pioglitazone"
-    const dosageVal = remDose.includes("5 mg") ? 5
-      : remDose.includes("200 mg") ? 200
-      : remDose.includes("10 mg") ? 10
-      : 30
-    const routeVal = remDose.includes("200 mg") ? "intravenous" : "oral"
-    const freqVal = remDose.includes("5 mg") ? "twice daily"
-      : remDose.includes("200 mg") ? "every 3 weeks"
-      : "once daily"
-    const scheduleVal = remDose.includes("5 mg") ? "Every 12 hours (08:00, 20:00)"
-      : remDose.includes("200 mg") ? "Q3W Day 1"
-      : "Every morning (08:00)"
-
-    setOverrideError(null)
-    try {
-      await submitDecision(
-        patient.id,
-        "override",
-        remPrompt,
-        [{
-          dosage_name: drugName,
-          proposed_dosage: dosageVal,
-          dosage_unit: "mg",
-          route: routeVal,
-          frequency: freqVal,
-          timing_schedule: scheduleVal,
-          target_field: "MedicationRequest.dosageInstruction[0]",
-        }],
-        {
-          standardized_action: standardized,
-          standardized_drug: drugName,
-          dosage: dosageVal,
-          dosage_unit: "mg",
-          route: routeVal,
-          frequency: freqVal,
-          timing_schedule: scheduleVal,
-        }
-      )
-      setActiveAction(standardized)
-      setOrderModified(true)
-      setDecision("override")
-      commentRef.current = ""
-      setComment("")
-      setModifyOpen(false)
-      onPatientUpdated?.({ action: standardized })
-      onRestartStream?.(standardized)
-    } catch (error) {
-      setOverrideError(error instanceof Error ? error.message : "Unable to apply the change. Please retry.")
-    } finally {
-      setIsApplyingRemediation(false)
+      : remDose.includes("30 mg") ? "Pioglitazone" : "Apixaban"
+    const dosageVal = Number(remDose.split(" ")[0])
+    const routeVal = drugName === "Pembrolizumab" ? "IV" : "oral"
+    const freqVal = drugName === "Pembrolizumab" ? "every 3 weeks"
+      : drugName === "Apixaban" ? "twice daily" : "once daily"
+    const extraction = {
+      is_valid: true, is_appropriate: true,
+      modifications: [{ dosage_name: drugName, proposed_dosage: dosageVal, dosage_unit: "mg", route: routeVal, frequency: freqVal }],
     }
+    commentRef.current = remPrompt
+    setComment(remPrompt)
+    setExtractionResult(extraction)
+    setModifyOpen(true)
+    setOverrideError(null)
+    setPendingConfirmation(preparePrescriptionConfirmation(remPrompt, extraction))
   }
 
   // AI Extraction for Clinical Override
@@ -792,38 +747,39 @@ export function DecisionGateway({
     }
   }
 
-  // Override Submit
-  async function handleOverrideSubmit() {
-    if (!extractionResult?.is_valid || extractionResult?.is_appropriate === false) return
+  // Opening the confirmation never writes a patient record.
+  function handleOverrideSubmit() {
     setOverrideError(null)
-    setIsSubmittingOverride(true)
-    let updated = activeAction
-    if (extractionResult?.standardized_action) {
-      updated = extractionResult.standardized_action
-    } else if (extractionResult?.modifications?.[0]) {
-      const mod = extractionResult.modifications[0]
-      updated = `${mod.dosage_name} ${mod.proposed_dosage} ${mod.dosage_unit || "mg"} ${mod.route || "oral"} ${mod.frequency || "twice daily"}`
-    }
     try {
-      await submitDecision(
-        patient.id,
-        "override",
-        comment,
-        extractionResult?.modifications || [],
-        extractionResult
-      )
-      setActiveAction(updated)
+      setPendingConfirmation(preparePrescriptionConfirmation(comment, extractionResult))
+    } catch (error) {
+      setOverrideError(error instanceof Error ? error.message : "Extract a complete prescription first.")
+    }
+  }
+
+  async function handleConfirmedSave() {
+    const draft = pendingConfirmation
+    if (!draft || saveInProgressRef.current) return
+    saveInProgressRef.current = true
+    setIsSubmittingOverride(true)
+    setOverrideError(null)
+    try {
+      const result = await submitDecision(patient.id, "override", draft.note, draft.modifications, draft.extraction, true)
+      if (result.status !== "restarting") throw new Error(result.error || "The database save could not be confirmed.")
+      setActiveAction(draft.action)
       setOrderModified(true)
       setDecision("override")
+      setPendingConfirmation(null)
       setExtractionResult(null)
       commentRef.current = ""
       setComment("")
       setModifyOpen(false)
-      onPatientUpdated?.({ action: updated })
-      onRestartStream?.(updated)
+      onPatientUpdated?.({ action: draft.action })
+      onRestartStream?.(draft.action)
     } catch (error) {
-      setOverrideError(error instanceof Error ? error.message : "Unable to save the prescription. Please retry.")
+      setOverrideError(error instanceof Error ? error.message : "The prescription could not be saved. Your note has been kept.")
     } finally {
+      saveInProgressRef.current = false
       setIsSubmittingOverride(false)
     }
   }
@@ -2607,11 +2563,11 @@ export function DecisionGateway({
 
             <Button
               onClick={handleApplyRemediation}
-              disabled={isExtracting || isApplyingRemediation}
+              disabled={isExtracting || isSubmittingOverride}
               size="sm"
               className="h-10 bg-amber-500 text-black font-bold hover:bg-amber-400 shrink-0 rounded-lg px-4 text-xs active:scale-95 transition-all"
             >
-              {isApplyingRemediation || isExtracting ? (
+              {isSubmittingOverride || isExtracting ? (
                 <>
                   <Loader2 className="size-3.5 mr-1.5 animate-spin" />
                   Applying Dose Adjustment ({remDose})...
@@ -2674,7 +2630,7 @@ export function DecisionGateway({
                 <Field label="Clinical Rationale & Doctor's Prescription Note">
                   <textarea
                     value={comment}
-                    onChange={(e) => { commentRef.current = e.target.value; setComment(e.target.value); setExtractionResult(null); setOverrideError(null) }}
+                    onChange={(e) => { commentRef.current = e.target.value; setComment(e.target.value); setExtractionResult(null); setPendingConfirmation(null); setOverrideError(null) }}
                     rows={4}
                     placeholder="E.g., Patient exhibits normal CrCl 68 mL/min and stable renal clearance. Titrate apixaban to 5 mg oral twice daily per protocol Arm A specifications..."
                     className="w-full resize-none rounded-xl border border-[#2e2e2e] bg-[#1a1a1a] p-3.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none leading-relaxed"
@@ -2774,12 +2730,12 @@ export function DecisionGateway({
                     {isSubmittingOverride ? (
                       <>
                         <Loader2 className="size-4 mr-2 animate-spin" />
-                        Updating FHIR Database & Re-evaluating...
+                        Saving prescription and re-evaluating...
                       </>
                     ) : (
                       <>
                         <Check className="size-4 mr-2" />
-                        Confirm & Update FHIR Database
+                        Review prescription change
                       </>
                     )}
                   </Button>
@@ -2789,6 +2745,16 @@ export function DecisionGateway({
           </div>
         </div>
       </div>
+      <PrescriptionConfirmation
+        draft={pendingConfirmation}
+        patientId={patient.id}
+        patientName={patient.name}
+        currentAction={activeAction}
+        busy={isSubmittingOverride}
+        error={overrideError}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={handleConfirmedSave}
+      />
     </section>
   )
 }

@@ -9,6 +9,11 @@ from services import client_agent, patient_service, supabase_reports
 from services.client_agent import _apply_modifications
 
 
+def receipt(patient_id, action):
+    return {'storage': 'supabase', 'verified': True, 'patient_id': patient_id,
+            'prescribed_action': action, 'updated_at': '2026-11-16T00:00:00+00:00'}
+
+
 def test_target_dose_and_route():
     data=extraction._fallback_extract('Give Apixaban; reduce from 40 mg to 5 mg oral twice daily')
     assert data['modifications'][0]['proposed_dosage']==5
@@ -34,7 +39,7 @@ def test_two_resumes_keep_updated_medications_and_history(monkeypatch):
     initial={'prescribed_action':'Apixaban 40 mg oral twice daily','rule_analysis_package':{'patient':copy.deepcopy(cache)}}
     monkeypatch.setattr(orchestrator,'runs',{'TEST':{'rag_output':initial,'result':{'prescribed_action':initial['prescribed_action'],'iteration_count':0,'report_history':[{'iteration':0}]}}})
     monkeypatch.setattr(orchestrator,'run_tasks',{})
-    def update(**v):cache['medications']=[v['prescribed_action']];return True
+    def update(**v):cache['medications']=[v['prescribed_action']];return receipt(v['patient_id'],v['prescribed_action'])
     monkeypatch.setattr(orchestrator,'update_patient_in_cache',update)
     monkeypatch.setattr(orchestrator,'extract_patient_clinical_package',lambda pid:copy.deepcopy(cache))
     async def execute(pid,rag,*args,**kwargs):
@@ -43,7 +48,7 @@ def test_two_resumes_keep_updated_medications_and_history(monkeypatch):
     monkeypatch.setattr(orchestrator,'_execute_run',execute)
     async def run():
         for dose,freq in [(5,'twice daily'),(2.5,'once daily')]:
-            await orchestrator.resume_orchestrator({'patientId':'TEST','modifications':[{'dosage_name':'Apixaban','proposed_dosage':dose,'dosage_unit':'mg','route':'oral','frequency':freq}]})
+            await orchestrator.resume_orchestrator({'patientId':'TEST','confirmed':True,'modifications':[{'dosage_name':'Apixaban','proposed_dosage':dose,'dosage_unit':'mg','route':'oral','frequency':freq}]})
             await orchestrator.run_tasks['TEST']
     asyncio.run(run())
     assert evaluated[0]['prescribed_action']=='Apixaban 5 mg oral twice daily'
@@ -57,7 +62,7 @@ def test_invalid_resume_does_not_persist(monkeypatch):
     monkeypatch.setattr(orchestrator,'runs',{'TEST':{'rag_output':{},'result':{'iteration_count':0}}})
     monkeypatch.setattr(orchestrator,'update_patient_in_cache',lambda **kw:pytest.fail('invalid prescription persisted'))
     with pytest.raises(HTTPException) as error:
-        asyncio.run(orchestrator.resume_orchestrator({'patientId':'TEST','extraction_details':{'is_valid':False}}))
+        asyncio.run(orchestrator.resume_orchestrator({'patientId':'TEST','confirmed':True,'extraction_details':{'is_valid':False}}))
     assert error.value.status_code==400
 
 
@@ -84,7 +89,21 @@ def test_http_extraction_resume_stream_and_results(
     monkeypatch.setattr(patient_service, '_PATIENTS_CACHE', {patient_id: copy.deepcopy(record)})
     monkeypatch.setattr(patient_service, 'CANDIDATE_PATHS', [database])
     synced = []
-    monkeypatch.setattr(supabase_reports, 'sync_patient_data_to_supabase', lambda pid, values: synced.append(copy.deepcopy(values)))
+    stored = {'patient_id': patient_id, 'prescribed_action': initial_action,
+              'clinical_data': copy.deepcopy(record['patient']), 'updated_at': '2026-01-01T00:00:00+00:00'}
+    original_client = httpx.Client
+    def database_transport(request):
+        if request.method == 'GET':
+            return httpx.Response(200, json=[copy.deepcopy(stored)])
+        assert request.method == 'PATCH'
+        assert request.url.params['updated_at'] == 'eq.' + stored['updated_at']
+        assert request.headers['prefer'] == 'return=representation'
+        patch = json.loads(request.content)
+        stored.update(patch)
+        synced.append(copy.deepcopy(patch['clinical_data']))
+        return httpx.Response(200, json=[copy.deepcopy(stored)])
+    monkeypatch.setattr(supabase_reports, '_config', lambda: ('https://database.test', 'test-key'))
+    monkeypatch.setattr(supabase_reports.httpx, 'Client', lambda **kwargs: original_client(transport=httpx.MockTransport(database_transport), **kwargs))
     monkeypatch.setattr(extraction, '_llm', None)
     monkeypatch.setattr(client_agent, 'record_trace', lambda *args, **kwargs: None)
     for name in ('runs', 'run_tasks', 'arbitration_results', 'hitl_packages'):
@@ -124,10 +143,12 @@ def test_http_extraction_resume_stream_and_results(
                 expected = f'{drug} {dose:g} mg {route} {frequency}'
                 assert extracted['standardized_action'] == expected
                 response = await client.post('/api/orchestrator/resume', json={
-                    'patientId': patient_id, 'extraction_details': extracted,
+                    'patientId': patient_id, 'confirmed': True, 'extraction_details': extracted,
                     'modifications': extracted['modifications'],
                 })
                 assert response.status_code == 200, response.text
+                assert response.json()['persistence']['verified'] is True
+                assert stored['prescribed_action'] == expected
                 await orchestrator.run_tasks[patient_id]
                 response = await client.get('/api/orchestrator/stream', params={'patientId': patient_id, 'action': expected})
                 assert response.status_code == 200

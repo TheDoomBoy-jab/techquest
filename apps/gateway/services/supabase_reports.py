@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import logging
 import os
 from datetime import datetime, timezone
@@ -25,6 +26,12 @@ _IN_MEMORY_REPORTS: dict[str, list[dict]] = {}
 
 class ReportPersistenceError(RuntimeError):
     pass
+
+
+class PatientPersistenceError(RuntimeError):
+    def __init__(self, message: str, status_code: int = 503):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def _load_env_if_missing() -> None:
@@ -91,7 +98,7 @@ def append_final_report(patient_id: str, report: dict) -> dict:
 
     # 2. Attempt remote Supabase synchronization
     url, key = _config()
-    if not url or not key:
+    if not url or not key or not httpx:
         logger.info("Saved report for %s locally (Supabase credentials not configured)", patient_id)
         return finalized_report
 
@@ -100,48 +107,43 @@ def append_final_report(patient_id: str, report: dict) -> dict:
 
     try:
         with httpx.Client(timeout=10) as client:
-            # Primary strategy: Store in clinical_data JSONB (guaranteed to exist across tables)
-            resp = client.get(
-                base,
-                params={"patient_id": f"eq.{patient_id}", "select": "patient_id,clinical_data"},
-                headers=headers,
-            )
-            if resp.status_code == 200:
-                rows = resp.json()
-                if rows:
-                    cdata = rows[0].get("clinical_data") or {}
-                    existing = cdata.get("adjudication_reports") or []
-                    if not isinstance(existing, list):
-                        existing = []
-                    cdata["adjudication_reports"] = [*existing, finalized_report]
-                    patch_resp = client.patch(
-                        base,
-                        params={"patient_id": f"eq.{patient_id}"},
-                        headers=headers,
-                        json={"clinical_data": cdata},
-                    )
-                    if patch_resp.status_code in (200, 204):
-                        logger.info("Report for %s synced to Supabase clinical_data", patient_id)
+            # Report appends share the patient's version so they cannot overwrite
+            # a prescription saved between this read and write. Retry conflicts.
+            for column in ("clinical_data", "adjudication_reports"):
+                for _ in range(3):
+                    response = client.get(base, headers=headers, params={
+                        "patient_id": f"eq.{patient_id}",
+                        "select": f"patient_id,{column},updated_at",
+                    })
+                    if response.status_code != 200:
+                        break
+                    rows = response.json()
+                    if not isinstance(rows, list) or len(rows) != 1:
+                        break
+                    previous = rows[0]
+                    value = copy.deepcopy(previous.get(column))
+                    if column == "clinical_data":
+                        value = value if isinstance(value, dict) else {}
+                        existing = value.get("adjudication_reports") or []
+                    else:
+                        existing = value or []
+                    existing = existing if isinstance(existing, list) else []
+                    reports = [*existing, finalized_report]
+                    if column == "clinical_data":
+                        value["adjudication_reports"] = reports
+                    else:
+                        value = reports
+                    version = previous.get("updated_at")
+                    saved = client.patch(base, headers=headers, params={
+                        "patient_id": f"eq.{patient_id}",
+                        "updated_at": f"eq.{version}" if version is not None else "is.null",
+                    }, json={column: value, "updated_at": datetime.now(timezone.utc).isoformat()})
+                    if saved.status_code != 200:
+                        break
+                    saved_rows = saved.json()
+                    if isinstance(saved_rows, list) and len(saved_rows) == 1:
+                        logger.info("Report for %s synced to Supabase", patient_id)
                         return finalized_report
-
-            # Secondary strategy: Direct adjudication_reports column if migrated
-            direct_resp = client.get(
-                base,
-                params={"patient_id": f"eq.{patient_id}", "select": "patient_id,adjudication_reports"},
-                headers=headers,
-            )
-            if direct_resp.status_code == 200:
-                rows = direct_resp.json()
-                if rows:
-                    existing = rows[0].get("adjudication_reports") or []
-                    if not isinstance(existing, list):
-                        existing = []
-                    client.patch(
-                        base,
-                        params={"patient_id": f"eq.{patient_id}"},
-                        headers=headers,
-                        json={"adjudication_reports": [*existing, finalized_report]},
-                    )
     except Exception as exc:
         logger.warning("Remote Supabase report sync encountered error (local copy preserved): %s", exc)
 
@@ -200,95 +202,86 @@ def get_final_reports(patient_id: str) -> list[dict]:
     return combined
 
 
-def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> bool:
-    """Synchronizes modified patient fields (age, sex, prescribed_action, clinical_data) to Supabase."""
+def load_persisted_patients() -> list[dict]:
+    """Hydrate saved fields on restart; fixtures remain available for read-only demos."""
     url, key = _config()
-    if not url or not key:
-        logger.info("Supabase sync skipped for %s (credentials not configured)", patient_id)
-        return False
+    if not url or not key or not httpx:
+        return []
+    try:
+        with httpx.Client(timeout=8) as client:
+            response = client.get(f"{url}/rest/v1/patients", headers=_headers(key), params={
+                "select": "patient_id,prescribed_action,clinical_data,age,sex",
+            })
+            response.raise_for_status()
+            rows = response.json()
+            return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Database unavailable while loading saved patients; local read-only fixtures remain available")
+        return []
+
+
+def sync_patient_data_to_supabase(patient_id: str, updates: dict) -> dict:
+    """Save to Supabase and verify the returned row. Never report a cache-only save."""
+    url, key = _config()
+    if not url or not key or not httpx:
+        raise PatientPersistenceError("Database saving is not configured. The change was not saved.")
 
     clean_id = patient_id.strip()
     headers = _headers(key)
     base = f"{url}/rest/v1/patients"
 
     try:
-        cdata = {}
-        if httpx:
-            with httpx.Client(timeout=10) as client:
-                resp = client.get(
-                    base,
-                    params={"patient_id": f"eq.{clean_id}", "select": "patient_id,clinical_data"},
-                    headers=headers,
-                )
-                if resp.status_code == 200:
-                    rows = resp.json()
-                    if rows:
-                        cdata = rows[0].get("clinical_data") or {}
-        else:
-            import urllib.request
-            req_get = urllib.request.Request(
-                f"{base}?patient_id=eq.{clean_id}&select=patient_id,clinical_data",
-                headers=headers,
-                method="GET",
-            )
-            with urllib.request.urlopen(req_get, timeout=10) as resp:
-                if resp.status == 200:
-                    rows = json.loads(resp.read().decode("utf-8"))
-                    if rows:
-                        cdata = rows[0].get("clinical_data") or {}
-
-        # 2. Build patch payload
-        patch_payload: dict = {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if "age" in updates and updates["age"] is not None:
-            patch_payload["age"] = updates["age"]
-            cdata["age"] = updates["age"]
-        if "sex" in updates and updates["sex"]:
-            s = str(updates["sex"]).strip().lower()
-            norm_sex = "female" if s.startswith("f") else "male" if s.startswith("m") else s
-            patch_payload["sex"] = norm_sex
-            cdata["sex"] = norm_sex
-        if "prescribed_action" in updates and updates["prescribed_action"]:
-            patch_payload["prescribed_action"] = updates["prescribed_action"]
-            cdata["prescribed_action"] = updates["prescribed_action"]
-        if "medications" in updates and updates["medications"]:
-            cdata["medications"] = updates["medications"]
-        if "dosage_instructions" in updates and updates["dosage_instructions"]:
-            cdata["dosage_instructions"] = updates["dosage_instructions"]
-        if "clinical_data" in updates and isinstance(updates["clinical_data"], dict):
-            cdata.update(updates["clinical_data"])
-
-        patch_payload["clinical_data"] = cdata
-
-        # 3. Patch Supabase record
-        if httpx:
-            with httpx.Client(timeout=10) as client:
-                patch_resp = client.patch(
-                    base,
-                    params={"patient_id": f"eq.{clean_id}"},
-                    headers=headers,
-                    json=patch_payload,
-                )
-                if patch_resp.status_code in (200, 204):
-                    logger.info("Successfully synced patient %s updates to Supabase", clean_id)
-                    return True
-                else:
-                    logger.warning("Supabase patient update returned HTTP %s for %s: %s", patch_resp.status_code, clean_id, patch_resp.text)
-                    return False
-        else:
-            import urllib.request
-            req_patch = urllib.request.Request(
-                f"{base}?patient_id=eq.{clean_id}",
-                data=json.dumps(patch_payload).encode("utf-8"),
-                headers=headers,
-                method="PATCH",
-            )
-            with urllib.request.urlopen(req_patch, timeout=10) as resp:
-                if resp.status in (200, 204):
-                    logger.info("Successfully synced patient %s updates to Supabase", clean_id)
-                    return True
-                return False
+        with httpx.Client(timeout=8) as client:
+            response = client.get(base, headers=headers, params={
+                "patient_id": f"eq.{clean_id}",
+                "select": "patient_id,prescribed_action,clinical_data,updated_at",
+            })
+            response.raise_for_status()
+            rows = response.json()
+            if not isinstance(rows, list) or len(rows) != 1 or rows[0].get("patient_id") != clean_id:
+                raise PatientPersistenceError("Patient was not found in the database. The change was not saved.", 404)
+            previous = rows[0]
+            cdata = copy.deepcopy(previous.get("clinical_data") or {})
+            if not isinstance(cdata, dict):
+                raise PatientPersistenceError("The stored patient record is invalid. The change was not saved.")
+            patch_payload = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            clinical_changes = copy.deepcopy(updates.get("clinical_data") or {})
+            for field in ("age", "sex", "prescribed_action", "medications", "dosage_instructions"):
+                if field in updates and updates[field] is not None:
+                    value = copy.deepcopy(updates[field])
+                    if field == "sex":
+                        value = str(value).lower()
+                        value = "female" if value.startswith("f") else "male" if value.startswith("m") else value
+                    clinical_changes[field] = value
+                    if field in ("age", "sex", "prescribed_action"):
+                        patch_payload[field] = value
+            cdata.update(clinical_changes)
+            patch_payload["clinical_data"] = cdata
+            version = previous.get("updated_at")
+            saved = client.patch(base, headers=headers, params={
+                "patient_id": f"eq.{clean_id}",
+                "updated_at": f"eq.{version}" if version is not None else "is.null",
+                "select": "patient_id,prescribed_action,clinical_data,updated_at,age,sex",
+            }, json=patch_payload)
+            saved.raise_for_status()
+            # A 200 with [] or 204 can mean no row was updated. Require evidence.
+            if saved.status_code != 200:
+                raise PatientPersistenceError("The database did not confirm the save. Reload the record before retrying.")
+            saved_rows = saved.json()
+            if not isinstance(saved_rows, list) or len(saved_rows) != 1:
+                raise PatientPersistenceError("The patient record changed or the update was not allowed. Reload and retry.", 409)
+            row = saved_rows[0]
+            if row.get("patient_id") != clean_id or not row.get("updated_at"):
+                raise PatientPersistenceError("The database returned an invalid save confirmation.")
+            actual_clinical = row.get("clinical_data") or {}
+            if not isinstance(actual_clinical, dict) or any(actual_clinical.get(k) != v for k, v in clinical_changes.items()):
+                raise PatientPersistenceError("The saved patient values could not be verified. Reload before retrying.")
+            if any(row.get(k) != v for k, v in patch_payload.items() if k not in ("updated_at", "clinical_data")):
+                raise PatientPersistenceError("The saved prescription could not be verified. Reload before retrying.")
+            return {"storage": "supabase", "verified": True, "patient_id": clean_id,
+                    "prescribed_action": row.get("prescribed_action"), "updated_at": row["updated_at"]}
+    except PatientPersistenceError:
+        raise
     except Exception as exc:
-        logger.warning("Failed syncing patient %s to Supabase: %s", clean_id, exc)
-        return False
+        logger.warning("Database patient save could not be confirmed (%s)", type(exc).__name__)
+        raise PatientPersistenceError("Could not reach or verify the database. Your change was not confirmed; please retry.") from exc
