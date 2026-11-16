@@ -37,6 +37,7 @@ export function AdjudicationConsole({
   const [arbitrationResult, setArbitrationResult] = useState<ArbitrationResult | null>(null)
   const [runStarted, setRunStarted] = useState(false)
   const [isReEvaluating, setIsReEvaluating] = useState(false)
+  const [evaluationFailed, setEvaluationFailed] = useState(false)
 
   useEffect(() => {
     setPatientState(patient)
@@ -54,6 +55,7 @@ export function AdjudicationConsole({
   useEffect(() => {
     let cancelled = false
     setRunStarted(false)
+    setEvaluationFailed(false)
 
     const baseUrl = getGatewayUrl()
     fetch(`${baseUrl}/api/orchestrator/runs`, {
@@ -104,6 +106,7 @@ export function AdjudicationConsole({
       handlePatientUpdated({ action: newAction })
     }
     setArbitrationResult(null)
+    setEvaluationFailed(false)
     setIsReEvaluating(true)
     setRunStarted(true)
     setStreamKey((prev) => prev + 1)
@@ -114,9 +117,12 @@ export function AdjudicationConsole({
       return
     }
     setIsReEvaluating(false)
+    setEvaluationFailed(false)
     setRunStarted(true)
     setArbitrationResult(result)
   }, [])
+
+  const handleEvaluationError = useCallback(() => setEvaluationFailed(true), [])
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
@@ -188,7 +194,7 @@ export function AdjudicationConsole({
         />
 
         {/* Re-evaluating or Starting State */}
-        {(!arbitrationResult || isReEvaluating) && (
+        {!evaluationFailed && (!arbitrationResult || isReEvaluating) && (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-sky-500/30 bg-[#111C2D] p-8 text-center shadow-xl">
             <div className="flex size-12 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400">
               <Loader2 className="size-6 animate-spin" />
@@ -229,6 +235,8 @@ export function AdjudicationConsole({
           modificationCount={modificationCount}
           key={streamKey}
           onComplete={handleArbitrationComplete}
+          onError={handleEvaluationError}
+          onRetry={() => setEvaluationFailed(false)}
         />
       </main>
     </div>

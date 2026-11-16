@@ -12,10 +12,21 @@ Verified locally on 2026-11-16. Verification covers the source changes in this r
 - Failed HTTP requests no longer become successful modifications in the UI. The note and extracted prescription remain available for retry; editing the note invalidates previous extraction, including late responses.
 - Result loading checks the requested prescription. Stream failures show an error and retry control instead of invented completion cards, confidence values and timings. Retrying reconnects to the existing run.
 
+## Completed-stream result loading follow-up
+
+The deployed P044 demo exposed a compatibility mismatch after modification. Its package returned `Apixaban 10 mg oral twice daily (Clinician modification: Apixaban set to 10 mg)`, while the UI requested `Apixaban 10 mg oral twice daily`. The previous exact-string comparison rejected the completed result, leaving all agent cards completed but the review panel stuck loading.
+
+The comparator now ignores only the known trailing `Clinician modification` audit annotation and normalizes case/whitespace. It still rejects different drugs, doses, units, routes, frequencies, missing orders and unknown clinical qualifiers. The original response and its audit text are preserved. This supports an older deployed gateway without waiting for a backend redeployment; the backend's partial-modification path also stops appending audit prose to its prescription string.
+
+A normal stream close after the reducer's completion event no longer overrides the pending result fetch. Genuine result-loading failures suppress the loading banner and retain the retry control; retry reconnects without starting another evaluation.
+
+Read-only verification against the actual deployed P044 response confirmed: HTTP 200, completed result, old comparison rejected it, new comparison accepted it, and a different requested dose remained rejected. No patient or evaluation state was changed by that verification.
+
 ## Verification
 
-- 14 Python regression tests passed.
-- 5 Node regression tests passed.
+- 15 Python dosage regression tests passed.
+- 4 FHIR regression tests passed.
+- 10 Node regression tests passed.
 - Next.js production build and TypeScript checking passed.
 - `git diff --check` passed.
 
@@ -28,8 +39,8 @@ External specialist responses and Supabase writes are stubbed in these tests. Th
 From the repository root, use a Python environment with the gateway dependencies and pytest installed, and Node.js with TypeScript stripping support:
 
 ```sh
-PYTHONPATH=apps/gateway python -m pytest -q apps/gateway/tests/test_dosage_modification.py
-node --experimental-strip-types --test apps/web/tests/prescription.test.mjs
+PYTHONPATH=apps/gateway python -m pytest -q apps/gateway/tests/test_dosage_modification.py packages/mcp-ehr/tests/test_fhir_client.py
+node --experimental-strip-types --test apps/web/tests/*.test.mjs
 pnpm --dir apps/web build
 git diff --check
 ```

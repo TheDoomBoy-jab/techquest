@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@supabase/supabase-js"
 import { getGatewayUrl } from "@/lib/api-config"
-import { targetDose, matchesTargetDose, postDecision } from "@/lib/prescription"
+import { targetDose, matchesTargetDose, matchesPrescriptionAction, postDecision } from "@/lib/prescription"
 import { PATIENTS } from "@/lib/clinical-data"
 
 export async function getPatientsFromSupabase() {
@@ -186,7 +186,7 @@ export async function getArbitrationResult(patientId: string, overrideAction?: s
         if (response.ok) {
           const pkg = await response.json()
           const matchesRequestedAction = !overrideAction ||
-            String(pkg?.prescribed_action || "").trim().toLowerCase() === overrideAction.trim().toLowerCase()
+            matchesPrescriptionAction(pkg?.prescribed_action, overrideAction)
           if (matchesRequestedAction && pkg && (pkg.patientId || pkg.patient_profile || pkg.final_verdict)) {
             if (demoOverride) {
               if (pkg.patient_profile) {

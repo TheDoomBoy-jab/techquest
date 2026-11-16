@@ -10,6 +10,8 @@ type Props = {
   action?: string
   modificationCount?: number
   onComplete?: (result: ArbitrationResult) => void
+  onError?: () => void
+  onRetry?: () => void
 }
 type AgentResult = {
   explanation?: string
@@ -26,7 +28,7 @@ type AgentView = Pick<AgentCard, "name"> & Partial<Omit<AgentCard, "name">> & {
   financialExposure?: number
 }
 
-export function ExecutionStream({ patientId, action, modificationCount = 0, onComplete }: Props) {
+export function ExecutionStream({ patientId, action, modificationCount = 0, onComplete, onError, onRetry }: Props) {
   const [agents, setAgents] = useState<AgentView[]>(() =>
     AGENTS.map(({ name }) => ({ name }))
   )
@@ -34,6 +36,7 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
   const [retryCount, setRetryCount] = useState(0)
   const actionRef = useRef(action)
   const onCompleteRef = useRef(onComplete)
+  const onErrorRef = useRef(onError)
 
   useEffect(() => {
     actionRef.current = action
@@ -41,7 +44,8 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
 
   useEffect(() => {
     onCompleteRef.current = onComplete
-  }, [onComplete])
+    onErrorRef.current = onError
+  }, [onComplete, onError])
 
   useEffect(() => {
     setAgents(AGENTS.map(({ name }) => ({ name })))
@@ -52,6 +56,12 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
     const streamUrl = `${baseUrl}/api/orchestrator/stream?patientId=${encodeURIComponent(patientId)}${activeAction ? `&action=${encodeURIComponent(activeAction)}` : ""}`
     const eventSource = new EventSource(streamUrl)
     let active = true
+    let terminalReceived = false
+    const reportFailure = () => {
+      if (!active) return
+      setConnectionState("error")
+      onErrorRef.current?.()
+    }
     eventSource.onopen = () => { if (active) setConnectionState("open") }
     eventSource.onmessage = (event) => {
       if (!active) return
@@ -67,18 +77,23 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
           return nextAgent
         }))
         if (updatedAgent.name === "Arbitration Reducer" && updatedAgent.status === "completed") {
+          terminalReceived = true
           getArbitrationResult(patientId, activeAction || undefined)
             .then((result) => {
-              if (active && result) onCompleteRef.current?.(result)
+              if (active && result) {
+                setConnectionState("open")
+                onCompleteRef.current?.(result)
+              }
             })
-            .catch(() => { if (active) setConnectionState("error") })
+            .catch(reportFailure)
           eventSource.close()
         }
       } catch (error) { console.error("Failed to parse SSE data:", error) }
     }
     eventSource.onerror = () => {
       eventSource.close()
-      if (active) setConnectionState("error")
+      // A normal stream close must not override the pending final-result fetch.
+      if (!terminalReceived) reportFailure()
     }
     return () => {
       active = false
@@ -102,7 +117,7 @@ export function ExecutionStream({ patientId, action, modificationCount = 0, onCo
       {connectionState === "error" && (
         <div role="alert" className="mb-4 flex items-center justify-between gap-3 text-xs text-rose-300">
           <span>The latest evaluation could not be loaded.</span>
-          <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="underline">
+          <button type="button" onClick={() => { onRetry?.(); setRetryCount((count) => count + 1) }} className="underline">
             Retry connection
           </button>
         </div>

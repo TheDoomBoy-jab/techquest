@@ -23,6 +23,20 @@ export function matchesTargetDose(note: string, extraction: {
     (extraction.dosage_unit === undefined || extraction.dosage_unit.toLowerCase() === target.unit)
 }
 
+/** Compare prescriptions without legacy audit notes appended by older gateways. */
+export function matchesPrescriptionAction(actual: unknown, expected: string): boolean {
+  function normalize(value: unknown): string {
+    if (typeof value !== "string") return ""
+    let action = value.trim()
+    // Only this known trailing annotation is metadata. Keep all clinical fields.
+    const annotation = /\s*\(clinician modification:\s*[^()]*\)\s*$/i
+    while (annotation.test(action)) action = action.replace(annotation, "").trim()
+    return action.replace(/\s+/g, " ").toLowerCase()
+  }
+  const prescription = normalize(actual)
+  return Boolean(prescription && prescription === normalize(expected))
+}
+
 export async function postDecision(endpoint: string, payload: unknown, request: typeof fetch = fetch) {
   const response = await request(endpoint, {
     method: "POST", headers: { "Content-Type": "application/json" },

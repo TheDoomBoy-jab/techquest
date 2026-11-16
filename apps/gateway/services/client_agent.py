@@ -573,7 +573,8 @@ def _apply_modifications(action: str, modifications: list[dict]) -> str:
                 updated = re.sub(pattern, rf"\g<1>{dosage} {unit}", updated, flags=re.I)
             else:
                 updated = f"{drug} {dosage} {unit} oral twice daily"
-    return f"{updated} (Clinician modification: {_modification_text(modifications)})"
+    # Audit context already travels in modifications/report history, not the order.
+    return updated
 
 
 def _history_entry(iteration: int, agent: str, result: dict, status: str, **extra) -> dict:

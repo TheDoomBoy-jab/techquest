@@ -24,6 +24,11 @@ def test_route_and_frequency_survive_modification():
     assert _apply_modifications('Apixaban 40 mg oral twice daily',[mod])=='Pembrolizumab 200 mg IV every 3 weeks'
 
 
+def test_partial_modification_keeps_audit_notes_out_of_prescription():
+    modification = {'dosage_name': 'Apixaban', 'proposed_dosage': 10, 'dosage_unit': 'mg'}
+    assert _apply_modifications('Apixaban 5 mg oral twice daily', [modification]) == 'Apixaban 10 mg oral twice daily'
+
+
 def test_two_resumes_keep_updated_medications_and_history(monkeypatch):
     cache={'medications':['Apixaban 40 mg BID']};evaluated=[]
     initial={'prescribed_action':'Apixaban 40 mg oral twice daily','rule_analysis_package':{'patient':copy.deepcopy(cache)}}
