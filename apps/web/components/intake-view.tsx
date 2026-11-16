@@ -1339,14 +1339,14 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
               </div>
             )}
 
-            {/* AI Extraction State 2: Extracted Data Confirmed & Appropriate */}
+            {/* Extracted fields still require clinical review. */}
             {extractionResult?.is_valid && extractionResult?.is_appropriate !== false && (
-              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3 animate-in fade-in duration-200">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+              <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3 animate-in fade-in duration-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2.5">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-400" />
-                    <p className="text-sm font-bold text-emerald-300">
-                      Prescription & Note Validated by Clinical LLM
+                    <AlertTriangle className="size-4 text-amber-400" />
+                    <p className="text-sm font-bold text-amber-300">
+                      Prescription extracted · clinical review required
                     </p>
                   </div>
                   {extractionResult.spelling_corrected && (
@@ -1357,7 +1357,7 @@ export function IntakeView({ onSubmit, disqualifiedIds = [] }: IntakeViewProps) 
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  {extractionResult.reasoning}
+                  Drug, dose, route and frequency were extracted from the note. Clinical safety and protocol compliance have not been established for this proposed order.
                 </p>
 
                 <div className="rounded-lg bg-[#111C2D] border border-slate-700/50 p-3 text-xs space-y-2">

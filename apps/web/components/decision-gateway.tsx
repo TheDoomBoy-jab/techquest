@@ -2657,15 +2657,15 @@ export function DecisionGateway({
               </div>
             )}
 
-            {/* AI Extraction State 2: Extracted Data Confirmed & Appropriate */}
+            {/* Extracted fields still require clinical review. */}
             {extractionResult?.is_valid && extractionResult?.is_appropriate !== false && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2.5">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-emerald-400" />
-                      <p className="text-sm font-bold text-emerald-300">
-                        Doctor Note Validated by Clinical LLM
+                      <AlertTriangle className="size-4 text-amber-400" />
+                      <p className="text-sm font-bold text-amber-300">
+                        Prescription extracted · clinical review required
                       </p>
                     </div>
                     {extractionResult.spelling_corrected && (
@@ -2676,7 +2676,7 @@ export function DecisionGateway({
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    {extractionResult.reasoning}
+                    Drug, dose, route and frequency were extracted from the note. Clinical safety and protocol compliance have not been established for this proposed order.
                   </p>
 
                   <div className="grid gap-2">

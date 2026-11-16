@@ -25,7 +25,7 @@ Read-only verification against the actual deployed P044 response confirmed: HTTP
 ## Verification
 
 - 44 Python regression tests passed, including dosage, persistence and FHIR client coverage.
-- 25 Node/React regression tests passed.
+- 26 Node/React regression tests passed.
 - Next.js production build and TypeScript checking passed.
 - `git diff --check` passed.
 
@@ -42,6 +42,7 @@ The database transport and external specialist responses are test fixtures. Thes
 - Supabase is authoritative for restart hydration. Local mirrors update atomically after cloud confirmation; mirror failure does not invalidate an already confirmed cloud save.
 - Patient updates and report appends compare `updated_at` before writing. A report append retries from the current row instead of overwriting a concurrently changed prescription.
 - Saved prescriptions take precedence over intake scenario presets. Remote evaluation guardrail results are no longer overwritten with a locally forced pass after demographic resupply.
+- Extraction panels and the confirmation dialog explicitly require clinical review instead of calling parsed notes clinically validated. The dialog also calls out a change of medication. Parsing a positive quantity establishes text extraction only; it does not establish patient-specific dose safety or protocol compliance.
 
 The configured Supabase hostname initially returned public DNS `NXDOMAIN`. On the follow-up check, public DNS resolved and an authenticated read of the existing patient table returned HTTP 200. The local resolver still had a cached negative answer, so that read used the public DNS answer while keeping TLS verification enabled. The live schema has no standalone `prescribed_action` column: prescription updates and verification now use `clinical_data.prescribed_action` in the existing JSONB column, alongside medications and dosage instructions. The `patients` table needs `patient_id`, `clinical_data`, `updated_at`, `age` and `sex` columns, all present in the inspected schema. No database migration or live patient mutation was performed. The writeback contract targets this application's Supabase table; it does not claim to update an external FHIR server.
 

@@ -85,3 +85,14 @@ test('a database error keeps the doctor note visible and allows retry', async ()
     assert.equal(view.callbacks.confirmed, 1)
   } finally { await view.close() }
 })
+
+test('a medication switch is called out before any save callback', async () => {
+  const view = await render({ currentAction: 'Pembrolizumab 200 mg IV every 3 weeks' })
+  try {
+    const notice = document.querySelector('[role="note"]')
+    assert.ok(notice)
+    assert.ok(notice.textContent.includes('Pembrolizumab'))
+    assert.ok(notice.textContent.includes('Apixaban'))
+    assert.equal(view.callbacks.confirmed, 0)
+  } finally { await view.close() }
+})
